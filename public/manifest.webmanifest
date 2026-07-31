@@ -1,0 +1,12 @@
+{
+  "name": "Tenant Trust",
+  "short_name": "Tenant Trust",
+  "description": "Build a verifiable rental trust history — fair for tenants and landlords.",
+  "start_url": "/home/",
+  "display": "standalone",
+  "background_color": "#0E1A2B",
+  "theme_color": "#2358C9",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

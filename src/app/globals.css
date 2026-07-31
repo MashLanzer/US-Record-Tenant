@@ -1,0 +1,221 @@
+@import "tailwindcss";
+
+/* Manual dark mode driven by a `.dark` class on <html> (set by ThemeProvider).
+   Defaults follow the OS preference on first load. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+   DESIGN TOKENS — Tenant Trust
+   Ported from the approved design system. Every color is chosen,
+   never inherited: neutrals carry a slight cool/brand bias.
+   ============================================================ */
+:root {
+  --canvas: #f5f7fa;
+  --surface: #ffffff;
+  --surface-2: #fafbfd;
+  --surface-3: #f0f3f8;
+
+  --ink: #0e1a2b;
+  --ink-soft: #48576d;
+  --ink-faint: #8391a6;
+  --ink-ghost: #b7c1d0;
+
+  --line: #e5e9f0;
+  --line-strong: #d3dae5;
+
+  /* Trust Blue — cobalt, confident, not banking-navy, not startup-purple */
+  --brand: #2358c9;
+  --brand-500: #3b72e0;
+  --brand-600: #2358c9;
+  --brand-700: #183f97;
+  --brand-tint: #e9f0fd;
+  --brand-tint-2: #dce7fb;
+
+  /* Semantic — each color means exactly one thing */
+  --verify: #0e9e6e; /* verified */
+  --verify-tint: #e0f4ec;
+  --amber: #c07c17; /* pending / in review */
+  --amber-tint: #f8eed8;
+  --danger: #d2453e; /* dispute / destructive */
+  --danger-tint: #fae4e2;
+  --violet: #6d4fcb; /* premium / AI */
+  --violet-tint: #ece7fa;
+
+  --shadow-1: 0 1px 2px rgba(14, 26, 43, 0.06);
+  --shadow-2: 0 4px 16px rgba(14, 26, 43, 0.08);
+  --shadow-3: 0 18px 48px rgba(14, 26, 43, 0.14);
+
+  --radius: 12px;
+
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #080c13;
+  --surface: #111825;
+  --surface-2: #0d131e;
+  --surface-3: #182233;
+
+  --ink: #ebeff6;
+  --ink-soft: #a4b2c6;
+  --ink-faint: #6e7e95;
+  --ink-ghost: #465468;
+
+  --line: #1e293b;
+  --line-strong: #2c3a50;
+
+  --brand: #5b8cff;
+  --brand-500: #6e9bff;
+  --brand-600: #5b8cff;
+  --brand-700: #8fb0ff;
+  --brand-tint: #14203a;
+  --brand-tint-2: #182a4b;
+
+  --verify: #2ed9a0;
+  --verify-tint: #0e2a22;
+  --amber: #e0a64b;
+  --amber-tint: #2a2110;
+  --danger: #f2726a;
+  --danger-tint: #2e1513;
+  --violet: #9c86f0;
+  --violet-tint: #1b1633;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+}
+
+/* Map tokens to Tailwind utilities (bg-surface, text-ink, border-line, …) */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-ink-ghost: var(--ink-ghost);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-brand: var(--brand);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-tint: var(--brand-tint);
+  --color-brand-tint-2: var(--brand-tint-2);
+
+  --color-verify: var(--verify);
+  --color-verify-tint: var(--verify-tint);
+  --color-amber: var(--amber);
+  --color-amber-tint: var(--amber-tint);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+  --color-violet: var(--violet);
+  --color-violet-tint: var(--violet-tint);
+
+  --shadow-e1: var(--shadow-1);
+  --shadow-e2: var(--shadow-2);
+  --shadow-e3: var(--shadow-3);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo,
+    Consolas, monospace;
+
+  --radius-xl: 16px;
+  --radius-2xl: 22px;
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+}
+
+/* Respect safe areas on notched devices (Capacitor/iOS) */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Tabular numerals for money & metrics */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle shimmer for skeleton loaders */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--surface) 60%, transparent),
+    transparent
+  );
+  animation: shimmer 1.2s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .skeleton::after {
+    animation: none;
+  }
+}
+
+/* Custom scrollbars (desktop) */
+@media (min-width: 1024px) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 99px;
+    border: 3px solid var(--canvas);
+  }
+}
+
+/* Visible keyboard focus */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
