@@ -21,6 +21,7 @@ import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { useAuth } from "@/lib/auth";
+import { trustLabel } from "@/lib/data";
 import { me, trustFactors, verifications } from "@/lib/mock";
 
 const copy = {
@@ -74,7 +75,18 @@ export default function ProfileScreen() {
   const c = useT(copy);
   const g = useT(common);
   const { locale } = useLocale();
-  const { signOut } = useAuth();
+  const { signOut, profile, demoMode } = useAuth();
+
+  const name = profile?.full_name || me.name;
+  const initials = profile?.avatar_initials || me.initials;
+  const score = profile?.trust_score ?? me.trustScore;
+  const role = (profile?.role ?? "tenant") as "tenant" | "landlord";
+  const verified = demoMode ? true : !!profile?.identity_verified;
+  const memberYear = demoMode
+    ? me.memberSince
+    : profile?.created_at
+      ? new Date(profile.created_at).getFullYear().toString()
+      : "—";
 
   const verifiedChips = verifications.filter((v) => v.state === "verified");
 
@@ -93,43 +105,61 @@ export default function ProfileScreen() {
       <Screen>
         {/* Header */}
         <div className="flex flex-col items-center pt-2 text-center">
-          <Avatar initials={me.initials} size={64} verified />
-          <h1 className="mt-3 text-[24px] font-extrabold tracking-tight text-ink">{me.name}</h1>
+          <Avatar initials={initials} size={64} verified={verified} />
+          <h1 className="mt-3 text-[24px] font-extrabold tracking-tight text-ink">{name}</h1>
           <div className="mt-1.5 flex items-center gap-2">
-            <Chip tone="brand">{g.roles.tenant}</Chip>
+            <Chip tone="brand">{g.roles[role]}</Chip>
             <span className="text-[13px] text-ink-faint">
-              {c.memberSince} {me.memberSince}
+              {c.memberSince} {memberYear}
             </span>
           </div>
         </div>
 
         {/* Verification chips */}
         <div className="mt-4 flex flex-wrap justify-center gap-2">
-          {verifiedChips.map((v) => (
-            <Chip key={v.key} tone="verify" icon={<Check className="h-3.5 w-3.5" strokeWidth={3} />}>
-              {locale === "es" ? v.labelEs : v.labelEn}
+          {demoMode ? (
+            verifiedChips.map((v) => (
+              <Chip key={v.key} tone="verify" icon={<Check className="h-3.5 w-3.5" strokeWidth={3} />}>
+                {locale === "es" ? v.labelEs : v.labelEn}
+              </Chip>
+            ))
+          ) : verified ? (
+            <Chip tone="verify" icon={<Check className="h-3.5 w-3.5" strokeWidth={3} />}>
+              {locale === "es" ? "Identidad verificada" : "Identity verified"}
             </Chip>
-          ))}
+          ) : (
+            <Chip tone="pending">
+              {locale === "es" ? "Identidad sin verificar" : "Identity not verified"}
+            </Chip>
+          )}
         </div>
 
         {/* Trust card */}
         <Card className="mt-5 p-5">
           <div className="flex items-center gap-4">
-            <TrustRing score={me.trustScore} size={92} />
+            <TrustRing score={score} size={92} />
             <div className="min-w-0">
               <div className="text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                 {c.yourIndex}
               </div>
-              <div className="mt-0.5 text-[14px] font-semibold text-ink">
-                {locale === "es" ? me.ratingLabelEs : me.ratingLabelEn}
-              </div>
-              <div className="text-[12px] text-ink-faint">
-                {locale === "es" ? me.yearsEs : me.yearsEn}
-              </div>
+              <div className="mt-0.5 text-[14px] font-semibold text-ink">{trustLabel(score, locale)}</div>
+              {demoMode && (
+                <div className="text-[12px] text-ink-faint">
+                  {locale === "es" ? me.yearsEs : me.yearsEn}
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-5 border-t border-line pt-4">
-            <FactorBars factors={trustFactors} labelKey={locale} />
+            {demoMode ? (
+              <FactorBars factors={trustFactors} labelKey={locale} />
+            ) : (
+              <p className="text-[13px] leading-snug text-ink-faint">
+                {locale === "es"
+                  ? "Tu score se desglosará aquí a medida que construyas historial verificado (pagos, contratos, evaluaciones)."
+                  : "Your score will break down here as you build verified history (payments, contracts, reviews)."}
+              </p>
+            )}
           </div>
         </Card>
 

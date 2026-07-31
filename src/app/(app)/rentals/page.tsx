@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { Plus, ShieldCheck, Clock, ScrollText, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, ShieldCheck, Clock, ScrollText } from "lucide-react";
 import { Screen } from "@/components/app-shell";
-import { Card, Button, Chip } from "@/components/ui/primitives";
+import { Card, Button, Chip, Skeleton } from "@/components/ui/primitives";
 import { EmptyState } from "@/components/ui/empty";
 import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
-import { properties } from "@/lib/mock";
+import { useAuth } from "@/lib/auth";
+import { fetchMyRentals, formatMonthYear, type Rental } from "@/lib/data";
 
 const copy = {
   en: {
@@ -19,11 +19,12 @@ const copy = {
     active: "Active",
     past: "Past",
     perMonth: "/mo",
-    present: "Present",
-    with: "with",
+    asLandlord: "As landlord",
+    asTenant: "As tenant",
     addContract: "Add contract",
-    emptyTitle: "No rentals here",
-    emptyDesc: "Nothing matches this filter yet. Add a contract to start building your history.",
+    emptyTitle: "No rentals yet",
+    emptyDesc: "Add your first contract to start building your portable rental history.",
+    emptyFiltered: "Nothing matches this filter yet.",
   },
   es: {
     title: "Historial",
@@ -32,11 +33,12 @@ const copy = {
     active: "Activos",
     past: "Anteriores",
     perMonth: "/mes",
-    present: "Actual",
-    with: "con",
+    asLandlord: "Como propietario",
+    asTenant: "Como inquilino",
     addContract: "Añadir contrato",
-    emptyTitle: "No hay alquileres aquí",
-    emptyDesc: "Nada coincide con este filtro todavía. Añade un contrato para empezar tu historial.",
+    emptyTitle: "Aún no hay alquileres",
+    emptyDesc: "Añade tu primer contrato para empezar a construir tu historial portátil.",
+    emptyFiltered: "Nada coincide con este filtro todavía.",
   },
 };
 
@@ -46,15 +48,23 @@ export default function RentalsScreen() {
   const c = useT(copy);
   const g = useT(common);
   const { locale } = useLocale();
+  const { user } = useAuth();
   const [filter, setFilter] = useState<Filter>("all");
+  const [rentals, setRentals] = useState<Rental[] | null>(null);
 
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleDateString(locale === "es" ? "es-ES" : "en-US", {
-      month: "short",
-      year: "numeric",
+  useEffect(() => {
+    let alive = true;
+    if (!user) return;
+    fetchMyRentals(user.id).then((r) => {
+      if (alive) setRentals(r);
     });
+    return () => {
+      alive = false;
+    };
+  }, [user]);
 
-  const filtered = properties.filter((p) => (filter === "all" ? true : p.status === filter));
+  const loading = rentals === null;
+  const filtered = (rentals ?? []).filter((r) => (filter === "all" ? true : r.status === filter));
 
   const chips: { key: Filter; label: string }[] = [
     { key: "all", label: c.all },
@@ -91,34 +101,41 @@ export default function RentalsScreen() {
           })}
         </div>
 
-        {/* Lease cards */}
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="mt-4 space-y-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-[104px] w-full rounded-2xl" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="mt-6">
             <EmptyState
               icon={<ScrollText />}
-              title={c.emptyTitle}
-              description={c.emptyDesc}
+              title={rentals!.length === 0 ? c.emptyTitle : c.emptyTitle}
+              description={rentals!.length === 0 ? c.emptyDesc : c.emptyFiltered}
               action={
-                <Button href="/property" icon={<Plus className="h-[18px] w-[18px]" />}>
+                <Button href="/rentals/new" icon={<Plus className="h-[18px] w-[18px]" />}>
                   {c.addContract}
                 </Button>
               }
             />
           </div>
         ) : (
-          <Stagger className="mt-4 space-y-3">
-            {filtered.map((p) => {
-              const range = `${fmt(p.startDate)} – ${p.endDate ? fmt(p.endDate) : c.present}`;
-              return (
-                <StaggerItem key={p.id}>
-                  <Link href="/property" className="block">
-                    <Card className="p-4 transition-all hover:shadow-[var(--shadow-2)] active:scale-[.99]">
+          <>
+            <Stagger className="mt-4 space-y-3">
+              {filtered.map((r) => {
+                const range = `${formatMonthYear(r.startDate, locale)} – ${
+                  r.status === "past" ? formatMonthYear(r.endDate, locale) : formatMonthYear(null, locale)
+                }`;
+                return (
+                  <StaggerItem key={r.id}>
+                    <Card className="p-4">
                       <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[15px] font-bold text-ink">{p.address}</div>
-                          <div className="mt-0.5 text-[13px] text-ink-faint">{p.city}</div>
+                          <div className="truncate text-[15px] font-bold text-ink">{r.address}</div>
+                          <div className="mt-0.5 text-[13px] text-ink-faint">{r.city}</div>
                         </div>
-                        {p.verified ? (
+                        {r.verified ? (
                           <Chip tone="verify" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
                             {g.status.verified}
                           </Chip>
@@ -133,32 +150,26 @@ export default function RentalsScreen() {
                         <div className="min-w-0">
                           <div className="text-[13px] text-ink-soft tnum">{range}</div>
                           <div className="mt-0.5 truncate text-[12.5px] text-ink-faint">
-                            {c.with} {p.counterparty}
+                            {r.relation === "landlord" ? c.asLandlord : c.asTenant}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 whitespace-nowrap">
-                          <span className="text-[15px] font-bold text-ink tnum">
-                            ${p.rent.toLocaleString()}
-                          </span>
+                          <span className="text-[15px] font-bold text-ink tnum">${r.rent.toLocaleString()}</span>
                           <span className="text-[13px] text-ink-faint">{c.perMonth}</span>
-                          <ChevronRight className="ml-1 h-4 w-4 text-ink-ghost" />
                         </div>
                       </div>
                     </Card>
-                  </Link>
-                </StaggerItem>
-              );
-            })}
-          </Stagger>
-        )}
+                  </StaggerItem>
+                );
+              })}
+            </Stagger>
 
-        {/* Primary action */}
-        {filtered.length > 0 && (
-          <div className="mt-5">
-            <Button href="/property" full icon={<Plus className="h-[18px] w-[18px]" />}>
-              {c.addContract}
-            </Button>
-          </div>
+            <div className="mt-5">
+              <Button href="/rentals/new" full icon={<Plus className="h-[18px] w-[18px]" />}>
+                {c.addContract}
+              </Button>
+            </div>
+          </>
         )}
       </Screen>
     </PageFade>

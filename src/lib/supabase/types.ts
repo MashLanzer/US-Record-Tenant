@@ -46,20 +46,24 @@ export interface Payment {
   created_at: string;
 }
 
-type Row<T> = T;
-type Insert<T> = Partial<T>;
-type Update<T> = Partial<T>;
+type TableDef<Row, Insert> = {
+  Row: Row;
+  Insert: Insert;
+  Update: Partial<Insert>;
+  Relationships: [];
+};
 
 export interface Database {
   public: {
     Tables: {
-      profiles: { Row: Row<Profile>; Insert: Insert<Profile>; Update: Update<Profile> };
-      properties: { Row: Row<Property>; Insert: Insert<Property>; Update: Update<Property> };
-      leases: { Row: Row<Lease>; Insert: Insert<Lease>; Update: Update<Lease> };
-      payments: { Row: Row<Payment>; Insert: Insert<Payment>; Update: Update<Payment> };
+      profiles: TableDef<Profile, Partial<Profile> & { id: string }>;
+      properties: TableDef<Property, Omit<Property, "id" | "created_at"> & { id?: string; created_at?: string }>;
+      leases: TableDef<Lease, Omit<Lease, "id" | "created_at"> & { id?: string; created_at?: string }>;
+      payments: TableDef<Payment, Omit<Payment, "id" | "created_at"> & { id?: string; created_at?: string }>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
     Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell, ChevronRight, ShieldCheck, TrendingUp, FileCheck2, Plus } from "lucide-react";
 import { Screen } from "@/components/app-shell";
@@ -9,6 +10,8 @@ import { TrustRing } from "@/components/ui/trust";
 import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
+import { useAuth } from "@/lib/auth";
+import { fetchMyRentals, trustLabel } from "@/lib/data";
 import { me, notifications } from "@/lib/mock";
 
 const copy = {
@@ -38,7 +41,23 @@ export default function HomeScreen() {
   const c = useT(copy);
   const g = useT(common);
   const { locale } = useLocale();
+  const { profile, user, demoMode } = useAuth();
   const unread = notifications.filter((n) => n.unread).length;
+
+  const [rentalCount, setRentalCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    fetchMyRentals(user.id).then((r) => alive && setRentalCount(r.length));
+    return () => {
+      alive = false;
+    };
+  }, [user]);
+
+  const name = profile?.full_name || me.name;
+  const initials = profile?.avatar_initials || me.initials;
+  const score = profile?.trust_score ?? me.trustScore;
+  const ratingLabel = trustLabel(score, locale);
 
   return (
     <PageFade>
@@ -47,7 +66,7 @@ export default function HomeScreen() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[13px] text-ink-faint">{c.greeting}</p>
-            <h1 className="text-[26px] font-extrabold tracking-tight text-ink">{me.name}</h1>
+            <h1 className="text-[26px] font-extrabold tracking-tight text-ink">{name}</h1>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -61,7 +80,7 @@ export default function HomeScreen() {
               )}
             </Link>
             <Link href="/profile" aria-label="Profile">
-              <Avatar initials={me.initials} size={44} verified />
+              <Avatar initials={initials} size={44} verified={!!profile?.identity_verified} />
             </Link>
           </div>
         </div>
@@ -70,15 +89,15 @@ export default function HomeScreen() {
         <Link href="/reputation" className="mt-4 block">
           <Card className="overflow-hidden border-0 bg-[linear-gradient(135deg,var(--brand-600),var(--brand-700))] p-5">
             <div className="flex items-center gap-4">
-              <TrustRing score={me.trustScore} size={92} tone="white" onDark label="" />
+              <TrustRing score={score} size={92} tone="white" onDark label="" />
               <div className="min-w-0 text-white">
                 <div className="text-[10px] font-semibold opacity-85">{c.yourScore}</div>
-                <div className="mt-0.5 text-[13px] opacity-95">
-                  {locale === "es" ? me.ratingLabelEs : me.ratingLabelEn}
-                </div>
-                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-semibold">
-                  <TrendingUp className="h-3.5 w-3.5" /> +3 {c.thisMonth}
-                </span>
+                <div className="mt-0.5 text-[13px] opacity-95">{ratingLabel}</div>
+                {demoMode && (
+                  <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-semibold">
+                    <TrendingUp className="h-3.5 w-3.5" /> +3 {c.thisMonth}
+                  </span>
+                )}
               </div>
               <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-white/70" />
             </div>
@@ -87,7 +106,7 @@ export default function HomeScreen() {
 
         {/* KPIs */}
         <div className="mt-3 flex gap-3">
-          <StatCard label={c.rentals} value="3" />
+          <StatCard label={c.rentals} value={rentalCount === null ? "—" : String(rentalCount)} />
           <StatCard label={c.onTime} value="100%" tone="verify" />
         </div>
 
