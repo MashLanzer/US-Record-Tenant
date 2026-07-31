@@ -13,11 +13,10 @@ import {
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
-import { Button, Card, Chip, Field, Input } from "@/components/ui/primitives";
+import { Button, Card, Chip, Field } from "@/components/ui/primitives";
 import { PageFade } from "@/components/motion";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n";
-import { common } from "@/lib/i18n/common";
 
 type FactType = "late" | "damage" | "contract" | "other";
 

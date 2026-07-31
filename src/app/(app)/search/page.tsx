@@ -7,7 +7,6 @@ import { Screen } from "@/components/app-shell";
 import { Card, Input, Button, Avatar } from "@/components/ui/primitives";
 import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
-import { common } from "@/lib/i18n/common";
 
 const copy = {
   en: {
@@ -52,7 +51,6 @@ const recent = [
 
 export default function SearchScreen() {
   const c = useT(copy);
-  const g = useT(common);
   const { locale } = useLocale();
   const [active, setActive] = useState<string[]>(["verified"]);
 

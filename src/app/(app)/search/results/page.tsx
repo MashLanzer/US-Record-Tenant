@@ -92,14 +92,16 @@ export default function SearchResultsScreen() {
                             </span>
                           </div>
                         </div>
-                        <div className="shrink-0 text-right">
-                          <span
-                            className={`text-[22px] font-extrabold tnum ${strong ? "text-verify" : "text-ink"}`}
-                          >
-                            {r.score}
-                          </span>
-                          <span className="text-[13px] font-semibold text-ink-faint tnum">/100</span>
-                          <ChevronRight className="ml-auto mt-0.5 h-4 w-4 text-ink-faint" />
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <div className="text-right">
+                            <span
+                              className={`text-[22px] font-extrabold tnum ${strong ? "text-verify" : "text-ink"}`}
+                            >
+                              {r.score}
+                            </span>
+                            <span className="text-[13px] font-semibold text-ink-faint tnum">/100</span>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-ink-faint" />
                         </div>
                       </Card>
                     </Link>

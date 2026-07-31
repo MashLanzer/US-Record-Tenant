@@ -17,7 +17,7 @@ import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
 import { Card, Button, Chip, Avatar } from "@/components/ui/primitives";
 import { PageFade, Stagger, StaggerItem } from "@/components/motion";
-import { useT, useLocale } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { properties, landlordMe } from "@/lib/mock";
 
@@ -65,7 +65,6 @@ const copy = {
 export default function PropertyScreen() {
   const c = useT(copy);
   const g = useT(common);
-  const { locale } = useLocale();
   const p = properties[0];
   const deposit = p.rent * 2;
 
