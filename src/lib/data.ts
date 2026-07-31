@@ -457,6 +457,19 @@ export function describeNotification(
         desc: (d.from as string) ?? "",
         tone: "brand",
       };
+    case "identity_verified":
+      return {
+        title: es ? "Identidad verificada" : "Identity verified",
+        desc: es ? "Tu badge de confianza está activo." : "Your trust badge is now active.",
+        tone: "verify",
+      };
+    case "evidence_added":
+    case "document_added":
+      return {
+        title: es ? "Documento subido" : "Document uploaded",
+        desc: (d.name as string) ?? "",
+        tone: "verify",
+      };
     default:
       return { title: item.type, desc: "", tone: "brand" };
   }
@@ -572,4 +585,78 @@ export async function sendMessage(convId: string, userId: string, body: string):
   const db = typed as unknown as SupabaseClient;
   const { error } = await db.from("messages").insert({ conversation_id: convId, sender_id: userId, body });
   if (error) throw new Error(error.message);
+}
+
+/* ------------------------------------------------------ documents & storage */
+export type DocItem = {
+  id: string;
+  name: string;
+  path: string;
+  kind: string;
+  timeLabel: string;
+};
+
+export async function listDocuments(userId: string, kind?: string): Promise<DocItem[]> {
+  const sb = getSupabase();
+  if (!sb) {
+    return [
+      { id: "d1", name: "Lease agreement.pdf", path: "", kind: "lease", timeLabel: "Jan 2023" },
+      { id: "d2", name: "Move-in inspection.pdf", path: "", kind: "document", timeLabel: "Jan 2023" },
+    ].filter((d) => !kind || d.kind === kind);
+  }
+  let req = sb
+    .from("documents")
+    .select("id, name, path, kind, created_at")
+    .eq("owner_id", userId)
+    .order("created_at", { ascending: false });
+  if (kind) req = req.eq("kind", kind);
+  const { data, error } = await req;
+  if (error || !data) return [];
+  return data.map((d: Record<string, unknown>) => ({
+    id: d.id as string,
+    name: (d.name as string) ?? "file",
+    path: (d.path as string) ?? "",
+    kind: (d.kind as string) ?? "document",
+    timeLabel: shortDate((d.created_at as string) ?? ""),
+  }));
+}
+
+export async function uploadDocument(
+  userId: string,
+  file: File,
+  kind: "document" | "evidence" | "lease" = "document",
+  leaseId?: string,
+): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+  const path = `${userId}/${crypto.randomUUID()}-${safeName}`;
+  const { error: upErr } = await typed.storage.from("documents").upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (upErr) throw new Error(upErr.message);
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db
+    .from("documents")
+    .insert({ owner_id: userId, name: file.name, path, kind, lease_id: leaseId ?? null });
+  if (error) throw new Error(error.message);
+  await notify(userId, kind === "evidence" ? "evidence_added" : "document_added", { name: file.name });
+}
+
+/** A short-lived signed URL to view/download a private document. */
+export async function getDocumentUrl(path: string): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb || !path) return null;
+  const { data } = await sb.storage.from("documents").createSignedUrl(path, 3600);
+  return data?.signedUrl ?? null;
+}
+
+/** Mark the current user's identity as verified (MVP — real KYC provider TBD). */
+export async function updateIdentityVerified(userId: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) return;
+  const db = typed as unknown as SupabaseClient;
+  await db.from("profiles").update({ identity_verified: true }).eq("id", userId);
+  await notify(userId, "identity_verified", {});
 }

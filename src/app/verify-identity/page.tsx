@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Camera, FileText, ChevronRight, Lock, CircleHelp } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { Card, Button } from "@/components/ui/primitives";
 import { Stagger, StaggerItem } from "@/components/motion";
 import { useT } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
+import { useAuth } from "@/lib/auth";
+import { updateIdentityVerified } from "@/lib/data";
 
 const copy = {
   en: {
@@ -22,6 +26,8 @@ const copy = {
     pending: "Pending",
     why: "Why we ask this?",
     encrypted: "Your documents are encrypted end-to-end",
+    prototype: "Prototype verification — full ID checks arrive with our verification partner.",
+    verifying: "Verifying…",
   },
   es: {
     title: "Verifica tu identidad",
@@ -37,18 +43,35 @@ const copy = {
     pending: "Pendiente",
     why: "¿Por qué lo pedimos?",
     encrypted: "Tus documentos están cifrados de extremo a extremo",
+    prototype: "Verificación de prototipo — la verificación real de identidad llega con nuestro proveedor.",
+    verifying: "Verificando…",
   },
 };
 
 export default function VerifyIdentityScreen() {
   const c = useT(copy);
   const g = useT(common);
+  const router = useRouter();
+  const { user } = useAuth();
+  const [verifying, setVerifying] = useState(false);
+
+  async function handleContinue() {
+    if (verifying) return;
+    setVerifying(true);
+    try {
+      if (user) await updateIdentityVerified(user.id);
+      router.push("/consent");
+    } catch {
+      setVerifying(false);
+    }
+  }
 
   return (
     <AuthShell showLogo>
       <div>
         <h1 className="text-[26px] font-extrabold tracking-tight text-ink">{c.title}</h1>
         <p className="mt-1.5 text-[14px] text-ink-faint">{c.subtitle}</p>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-ink-faint">{c.prototype}</p>
       </div>
 
       <Stagger className="mt-6 flex flex-col gap-3">
@@ -120,8 +143,14 @@ export default function VerifyIdentityScreen() {
           <Lock className="h-3.5 w-3.5 text-verify" />
           {c.encrypted}
         </div>
-        <Button href="/consent" full size="lg" iconRight={<ChevronRight className="h-[18px] w-[18px]" />}>
-          {g.actions.continue}
+        <Button
+          full
+          size="lg"
+          onClick={handleContinue}
+          disabled={verifying}
+          iconRight={<ChevronRight className="h-[18px] w-[18px]" />}
+        >
+          {verifying ? c.verifying : g.actions.continue}
         </Button>
       </div>
     </AuthShell>

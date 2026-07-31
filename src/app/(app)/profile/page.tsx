@@ -90,8 +90,14 @@ export default function ProfileScreen() {
 
   const verifiedChips = verifications.filter((v) => v.state === "verified");
 
+  const docCopy = useT({
+    en: { title: "Documents", sub: "Contracts, receipts, evidence" },
+    es: { title: "Documentos", sub: "Contratos, recibos, evidencia" },
+  });
+
   const menu = [
     { icon: <ShieldCheck className="h-5 w-5" />, title: c.reputation, subtitle: c.reputationSub, href: "/reputation", tone: "brand" as const },
+    { icon: <FileText className="h-5 w-5" />, title: docCopy.title, subtitle: docCopy.sub, href: "/documents", tone: "verify" as const },
     { icon: <BadgeCheck className="h-5 w-5" />, title: c.verification, subtitle: c.verificationSub, href: "/verification-status", tone: "verify" as const },
     { icon: <BarChart3 className="h-5 w-5" />, title: c.stats, subtitle: c.statsSub, href: "/stats", tone: "brand" as const },
     { icon: <FileText className="h-5 w-5" />, title: c.dossier, subtitle: c.dossierSub, href: "/dossier", tone: "neutral" as const },

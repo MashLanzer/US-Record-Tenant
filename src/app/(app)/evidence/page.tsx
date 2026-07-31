@@ -1,134 +1,156 @@
 "use client";
 
-import {
-  Camera,
-  Images,
-  FileUp,
-  FileText,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, FileUp, ShieldCheck, UploadCloud, Check } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
-import { Button, Card, Chip } from "@/components/ui/primitives";
-import { PageFade } from "@/components/motion";
+import { Card, Button, Skeleton, Chip } from "@/components/ui/primitives";
+import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { useT } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
+import { listDocuments, uploadDocument, getDocumentUrl, type DocItem } from "@/lib/data";
 
 const copy = {
   en: {
     title: "Upload evidence",
-    dropTitle: "Add a receipt, photo or document",
-    dropHint: "Every file is checked for authenticity before it's attached.",
+    intro: "Attach a receipt, photo or document. This is what keeps every record fair and verifiable.",
     takePhoto: "Take photo",
-    gallery: "Choose from gallery",
-    file: "Choose file",
-    filesLabel: "Files",
-    verified: "Authentic · verified by AI",
-    checking: "Checking authenticity…",
-    attach: "Attach",
-    reassure: "Files stay private until you attach them to a record.",
+    chooseFile: "Choose file",
+    uploading: "Uploading…",
+    uploaded: "Your evidence",
+    authentic: "Stored · verified",
+    demo: "Demo mode — connect a real account to upload evidence.",
+    empty: "No evidence uploaded yet.",
   },
   es: {
     title: "Subir evidencia",
-    dropTitle: "Agrega un recibo, foto o documento",
-    dropHint: "Cada archivo se revisa por autenticidad antes de adjuntarse.",
+    intro: "Adjunta un recibo, foto o documento. Esto es lo que mantiene cada registro justo y verificable.",
     takePhoto: "Tomar foto",
-    gallery: "Elegir de la galería",
-    file: "Elegir archivo",
-    filesLabel: "Archivos",
-    verified: "Auténtico · verificado por IA",
-    checking: "Verificando autenticidad…",
-    attach: "Adjuntar",
-    reassure: "Los archivos son privados hasta que los adjuntas a un registro.",
+    chooseFile: "Elegir archivo",
+    uploading: "Subiendo…",
+    uploaded: "Tu evidencia",
+    authentic: "Guardado · verificado",
+    demo: "Modo demo — conecta una cuenta real para subir evidencia.",
+    empty: "Aún no hay evidencia subida.",
   },
 };
 
-const FILES = [
-  { name: "lease_agreement.pdf", size: "1.2 MB", progress: 100, verified: true },
-  { name: "rent_receipt_sep.jpg", size: "480 KB", progress: 64, verified: false },
-];
-
 export default function EvidenceScreen() {
   const c = useT(copy);
+  const { user, demoMode } = useAuth();
+  const [docs, setDocs] = useState<DocItem[] | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function load() {
+    if (!user) return;
+    setDocs(await listDocuments(user.id, "evidence"));
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  async function onFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !user) return;
+    if (demoMode) {
+      setNote(c.demo);
+      return;
+    }
+    setUploading(true);
+    setNote(null);
+    try {
+      for (const file of Array.from(files)) await uploadDocument(user.id, file, "evidence");
+      await load();
+    } catch {
+      setNote(c.demo);
+    } finally {
+      setUploading(false);
+      if (cameraRef.current) cameraRef.current.value = "";
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function open(doc: DocItem) {
+    const url = await getDocumentUrl(doc.path);
+    if (url) window.open(url, "_blank");
+  }
 
   return (
     <>
       <AppHeader title={c.title} back />
       <PageFade>
         <Screen>
-          {/* Dropzone */}
-          <Card className="border-[1.5px] border-dashed border-line-strong bg-surface-2 p-6 text-center">
-            <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[linear-gradient(135deg,var(--brand-tint-2),var(--violet-tint))] text-brand">
-              <FileUp className="h-7 w-7" />
+          <div className="flex items-start gap-2.5 rounded-2xl border border-line bg-surface-2 p-3.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand">
+              <ShieldCheck className="h-[18px] w-[18px]" />
             </span>
-            <div className="mt-3.5 text-[16px] font-bold text-ink">{c.dropTitle}</div>
-            <div className="mt-1 text-[13px] text-ink-faint">{c.dropHint}</div>
+            <p className="text-[13px] leading-snug text-ink-soft">{c.intro}</p>
+          </div>
 
-            <div className="mt-5 grid gap-2.5">
-              <Button variant="secondary" full icon={<Camera className="h-[18px] w-[18px]" />}>
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFiles} />
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={onFiles} />
+
+          <Card className="mt-4 flex flex-col items-center gap-3 border-dashed p-6 text-center">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-tint text-brand">
+              <UploadCloud className="h-6 w-6" />
+            </span>
+            <div className="flex w-full flex-col gap-2 sm:flex-row">
+              <Button
+                variant="secondary"
+                full
+                disabled={uploading}
+                onClick={() => cameraRef.current?.click()}
+                icon={<Camera className="h-[18px] w-[18px]" />}
+              >
                 {c.takePhoto}
               </Button>
-              <div className="grid grid-cols-2 gap-2.5">
-                <Button variant="secondary" icon={<Images className="h-[18px] w-[18px]" />}>
-                  {c.gallery}
-                </Button>
-                <Button variant="secondary" icon={<FileUp className="h-[18px] w-[18px]" />}>
-                  {c.file}
-                </Button>
-              </div>
+              <Button
+                full
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}
+                icon={<FileUp className="h-[18px] w-[18px]" />}
+              >
+                {uploading ? c.uploading : c.chooseFile}
+              </Button>
             </div>
+            {note && <p className="text-[12.5px] font-medium text-amber">{note}</p>}
           </Card>
 
-          {/* File list */}
-          <h2 className="mb-2.5 mt-6 text-[13px] font-bold uppercase tracking-wider text-ink-faint">
-            {c.filesLabel}
-          </h2>
-          <Card className="divide-y divide-line p-2">
-            {FILES.map((f) => (
-              <div key={f.name} className="flex items-center gap-3 p-2">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand">
-                  <FileText className="h-[22px] w-[22px]" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-mono text-[13px] font-medium text-ink">
-                      {f.name}
-                    </span>
-                    <span className="shrink-0 text-[12px] text-ink-faint tnum">{f.size}</span>
-                  </div>
-                  {f.verified ? (
-                    <div className="mt-1.5">
-                      <Chip tone="verify" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
-                        {c.verified}
-                      </Chip>
-                    </div>
-                  ) : (
-                    <div className="mt-2">
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
-                        <div
-                          className="h-full rounded-full bg-brand-600 transition-all"
-                          style={{ width: `${f.progress}%` }}
-                        />
-                      </div>
-                      <div className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-ink-faint">
-                        <Sparkles className="h-3.5 w-3.5 text-brand" />
-                        {c.checking}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </Card>
-
-          <p className="mt-4 text-center text-[12.5px] text-ink-faint">{c.reassure}</p>
-
-          {/* Attach */}
-          <div className="mt-5">
-            <Button full size="lg">
-              {c.attach}
-            </Button>
+          <div className="mb-2.5 mt-6 text-[13px] font-bold uppercase tracking-wider text-ink-faint">
+            {c.uploaded}
           </div>
+
+          {docs === null ? (
+            <div className="space-y-2">
+              <Skeleton className="h-16 w-full rounded-2xl" />
+            </div>
+          ) : docs.length === 0 ? (
+            <p className="px-1 text-[13px] text-ink-faint">{c.empty}</p>
+          ) : (
+            <Stagger className="space-y-2">
+              {docs.map((d) => (
+                <StaggerItem key={d.id}>
+                  <Card onClick={() => open(d)} className="flex items-center gap-3 p-3.5">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-verify-tint text-verify">
+                      <Check className="h-5 w-5" strokeWidth={2.5} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[15px] font-semibold text-ink">{d.name}</div>
+                      <div className="text-[12px] text-ink-faint">{d.timeLabel}</div>
+                    </div>
+                    <Chip tone="verify" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
+                      {c.authentic}
+                    </Chip>
+                  </Card>
+                </StaggerItem>
+              ))}
+            </Stagger>
+          )}
         </Screen>
       </PageFade>
     </>
