@@ -105,7 +105,7 @@ export default function SearchResultsScreen() {
                   const strong = r.score >= 85;
                   return (
                     <StaggerItem key={r.id}>
-                      <Link href="/trust" className="block">
+                      <Link href={`/trust?id=${r.id}`} className="block">
                         <Card className="flex items-center gap-3.5 p-3.5 transition-all hover:shadow-[var(--shadow-2)] active:scale-[.99]">
                           <Avatar initials={r.initials} size={52} verified={r.verified} />
                           <div className="min-w-0 flex-1">

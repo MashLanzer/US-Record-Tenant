@@ -12,6 +12,11 @@ import {
   timeline as mockTimeline,
   notifications as mockNotifications,
   conversations as mockConversations,
+  trustFactors as mockFactors,
+  publicProfile as mockPublicProfile,
+  accessLog as mockAccessLog,
+  me as mockMe,
+  type TrustFactor,
 } from "@/lib/mock";
 
 export type Rental = {
@@ -659,4 +664,182 @@ export async function updateIdentityVerified(userId: string): Promise<void> {
   const db = typed as unknown as SupabaseClient;
   await db.from("profiles").update({ identity_verified: true }).eq("id", userId);
   await notify(userId, "identity_verified", {});
+}
+
+/* --------------------------------------------------- trust score (computed) */
+export type TrustBreakdown = { score: number; factors: TrustFactor[] };
+
+function factorTone(v: number): "verify" | "brand" | "amber" {
+  return v >= 85 ? "verify" : v >= 70 ? "brand" : "amber";
+}
+
+/** Compute the trust score + factor breakdown from real activity and sync it. */
+export async function computeAndSyncTrust(userId: string): Promise<TrustBreakdown> {
+  const sb = getSupabase();
+  if (!sb) return { score: mockMe.trustScore, factors: mockFactors };
+
+  const [rentals, payments, profRes] = await Promise.all([
+    fetchMyRentals(userId),
+    fetchMyPayments(userId),
+    sb.from("profiles").select("identity_verified").eq("id", userId).single(),
+  ]);
+  const idVerified = Boolean((profRes.data as Record<string, unknown> | null)?.identity_verified);
+
+  const payTotal = payments.length;
+  const payOnTime = payments.filter((p) => p.status === "onTime").length;
+  const punctuality = payTotal > 0 ? Math.round((payOnTime / payTotal) * 100) : 70;
+  const verification = idVerified ? 100 : 40;
+  const history = Math.min(100, 40 + rentals.length * 25 + (payTotal >= 6 ? 15 : 0));
+
+  const factors: TrustFactor[] = [
+    { key: "punctuality", labelEn: "Payment punctuality", labelEs: "Puntualidad de pago", score: punctuality, tone: factorTone(punctuality) },
+    { key: "verification", labelEn: "Verification", labelEs: "Verificación", score: verification, tone: factorTone(verification) },
+    { key: "history", labelEn: "History depth", labelEs: "Historial", score: history, tone: factorTone(history) },
+  ];
+
+  const score = Math.max(
+    40,
+    Math.min(100, Math.round(punctuality * 0.4 + verification * 0.3 + history * 0.3)),
+  );
+
+  const db = sb as unknown as SupabaseClient;
+  await db.from("profiles").update({ trust_score: score }).eq("id", userId);
+
+  return { score, factors };
+}
+
+/* ------------------------------------------------------------------- stats */
+export type StatsData = {
+  score: number;
+  rentals: number;
+  onTimeRate: number;
+  totalPaid: number;
+  monthly: { label: string; amount: number }[];
+};
+
+export async function fetchStats(userId: string, locale: Locale): Promise<StatsData> {
+  const sb = getSupabase();
+  if (!sb) {
+    const total = mockPayments.reduce((s, p) => s + p.amount, 0);
+    return {
+      score: mockMe.trustScore,
+      rentals: mockProperties.length,
+      onTimeRate: 100,
+      totalPaid: total,
+      monthly: mockPayments.slice(0, 6).reverse().map((p) => ({
+        label: (locale === "es" ? p.monthEs : p.monthEn).split(" ")[0].slice(0, 3),
+        amount: p.amount,
+      })),
+    };
+  }
+
+  const [rentals, payments, profRes] = await Promise.all([
+    fetchMyRentals(userId),
+    fetchMyPayments(userId),
+    sb.from("profiles").select("trust_score").eq("id", userId).single(),
+  ]);
+  const total = payments.reduce((s, p) => s + p.amount, 0);
+  const onTime = payments.filter((p) => p.status === "onTime").length;
+
+  // Last 6 payments as a simple monthly series (oldest → newest).
+  const monthly = [...payments]
+    .reverse()
+    .slice(-6)
+    .map((p) => ({
+      label: p.dueDate ? formatMonthYear(p.dueDate, locale).split(" ")[0] : "—",
+      amount: p.amount,
+    }));
+
+  return {
+    score: ((profRes.data as Record<string, unknown> | null)?.trust_score as number) ?? 70,
+    rentals: rentals.length,
+    onTimeRate: payments.length > 0 ? Math.round((onTime / payments.length) * 100) : 0,
+    totalPaid: total,
+    monthly,
+  };
+}
+
+/* --------------------------------------------------- public trust profile */
+export type PublicProfileData = {
+  id: string;
+  name: string;
+  initials: string;
+  score: number;
+  verified: boolean;
+  role: "tenant" | "landlord";
+  memberYear: string;
+};
+
+export async function fetchPublicProfile(id: string): Promise<PublicProfileData | null> {
+  const sb = getSupabase();
+  if (!sb || !id) {
+    return {
+      id: "demo",
+      name: mockPublicProfile.name,
+      initials: mockPublicProfile.initials,
+      score: mockPublicProfile.trustScore,
+      verified: true,
+      role: "tenant",
+      memberYear: "2021",
+    };
+  }
+  const { data, error } = await sb
+    .from("profiles")
+    .select("id, full_name, avatar_initials, trust_score, identity_verified, role, created_at")
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  const p = data as Record<string, unknown>;
+  return {
+    id: p.id as string,
+    name: (p.full_name as string) || "—",
+    initials: (p.avatar_initials as string) || "?",
+    score: (p.trust_score as number) ?? 70,
+    verified: Boolean(p.identity_verified),
+    role: (p.role as "tenant" | "landlord") ?? "tenant",
+    memberYear: p.created_at ? new Date(p.created_at as string).getFullYear().toString() : "—",
+  };
+}
+
+/** Record that the current user viewed someone's profile (transparency log). */
+export async function recordProfileView(viewerId: string, viewedId: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed || viewerId === viewedId) return;
+  try {
+    const db = typed as unknown as SupabaseClient;
+    await db.from("profile_views").insert({ viewer_id: viewerId, viewed_id: viewedId });
+  } catch {
+    /* ignore */
+  }
+}
+
+/* ------------------------------------------------------------- access log */
+export type AccessLogItem = { id: string; who: string; whenLabel: string; reason: string };
+
+export async function fetchAccessLog(userId: string, locale: Locale): Promise<AccessLogItem[]> {
+  const sb = getSupabase();
+  if (!sb) {
+    return mockAccessLog.map((a) => ({
+      id: a.id,
+      who: a.who,
+      whenLabel: locale === "es" ? a.whenEs : a.whenEn,
+      reason: locale === "es" ? a.reasonEs : a.reasonEn,
+    }));
+  }
+  const { data, error } = await sb
+    .from("profile_views")
+    .select("id, reason, created_at, viewer:profiles!profile_views_viewer_id_fkey(full_name)")
+    .eq("viewed_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(30);
+  if (error || !data) return [];
+  return data.map((v: Record<string, unknown>) => {
+    const viewer = (v.viewer ?? {}) as { full_name?: string };
+    return {
+      id: v.id as string,
+      who: viewer.full_name || (locale === "es" ? "Alguien" : "Someone"),
+      whenLabel: shortDate((v.created_at as string) ?? ""),
+      reason: locale === "es" ? "Vio tu perfil de confianza" : "Viewed your trust profile",
+    };
+  });
 }
