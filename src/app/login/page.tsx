@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ScanFace, Apple } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { Button, Field, Input } from "@/components/ui/primitives";
 import { useT } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 
 const copy = {
   en: {
@@ -16,6 +18,8 @@ const copy = {
     password: "Password",
     passwordPh: "Your password",
     logIn: "Log in",
+    loggingIn: "Logging in…",
+    genericErr: "Could not log in. Check your details and try again.",
     forgot: "Forgot password?",
     or: "or",
     apple: "Continue with Apple",
@@ -30,6 +34,8 @@ const copy = {
     password: "Contraseña",
     passwordPh: "Tu contraseña",
     logIn: "Iniciar sesión",
+    loggingIn: "Entrando…",
+    genericErr: "No pudimos iniciar sesión. Revisa tus datos e inténtalo de nuevo.",
     forgot: "¿Olvidaste tu contraseña?",
     or: "o",
     apple: "Continuar con Apple",
@@ -47,8 +53,34 @@ function GoogleGlyph() {
 
 export default function LoginScreen() {
   const c = useT(copy);
+  const router = useRouter();
+  const { signIn, signInWithOAuth, demoMode } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    const { error } = await signIn(email, password);
+    if (error) {
+      setError(error);
+      setSubmitting(false);
+      return;
+    }
+    router.push("/home");
+  }
+
+  async function handleOAuth(provider: "google" | "apple") {
+    if (demoMode) {
+      router.push("/home");
+      return;
+    }
+    const { error } = await signInWithOAuth(provider);
+    if (error) setError(error);
+  }
 
   return (
     <AuthShell showLogo>
@@ -57,11 +89,18 @@ export default function LoginScreen() {
         <p className="mt-1.5 text-[15px] text-ink-faint">{c.subtitle}</p>
       </div>
 
-      <Button variant="secondary" size="lg" full icon={<ScanFace className="h-5 w-5 text-brand" />}>
+      <Button
+        type="button"
+        variant="secondary"
+        size="lg"
+        full
+        icon={<ScanFace className="h-5 w-5 text-brand" />}
+        onClick={() => router.push("/home")}
+      >
         {c.faceId}
       </Button>
 
-      <form className="mt-6 space-y-4" onSubmit={(e) => e.preventDefault()}>
+      <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
         <Field label={c.email}>
           <Input
             type="email"
@@ -82,8 +121,10 @@ export default function LoginScreen() {
           />
         </Field>
 
-        <Button href="/home" type="submit" size="lg" full>
-          {c.logIn}
+        {error && <p className="text-[13px] font-medium text-danger">{error}</p>}
+
+        <Button type="submit" size="lg" full disabled={submitting}>
+          {submitting ? c.loggingIn : c.logIn}
         </Button>
       </form>
 
@@ -98,10 +139,24 @@ export default function LoginScreen() {
       </div>
 
       <div className="space-y-3">
-        <Button variant="secondary" size="lg" full icon={<Apple className="h-5 w-5 text-ink" />}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="lg"
+          full
+          icon={<Apple className="h-5 w-5 text-ink" />}
+          onClick={() => handleOAuth("apple")}
+        >
           {c.apple}
         </Button>
-        <Button variant="secondary" size="lg" full icon={<GoogleGlyph />}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="lg"
+          full
+          icon={<GoogleGlyph />}
+          onClick={() => handleOAuth("google")}
+        >
           {c.google}
         </Button>
       </div>

@@ -22,6 +22,7 @@ import { Card, ListRow, Toggle } from "@/components/ui/primitives";
 import { ThemeToggle, LangToggle } from "@/components/toggles";
 import { PageFade } from "@/components/motion";
 import { useT } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 import { me } from "@/lib/mock";
 
 const copy = {
@@ -75,6 +76,7 @@ const chevron = <ChevronRight className="h-5 w-5 text-ink-faint" />;
 
 export default function SettingsScreen() {
   const c = useT(copy);
+  const { signOut } = useAuth();
   const [faceId, setFaceId] = useState(true);
   const [notify, setNotify] = useState(true);
 
@@ -131,7 +133,7 @@ export default function SettingsScreen() {
 
           {/* Log out */}
           <Card className="mt-6 px-3.5">
-            <ListRow icon={<LogOut className="h-5 w-5" />} title={<span className="text-danger">{c.logout}</span>} tone="danger" onClick={() => {}} />
+            <ListRow icon={<LogOut className="h-5 w-5" />} title={<span className="text-danger">{c.logout}</span>} tone="danger" onClick={signOut} />
           </Card>
         </Screen>
       </PageFade>

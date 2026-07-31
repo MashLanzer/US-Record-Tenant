@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/lib/theme";
 import { LocaleProvider } from "@/lib/i18n";
+import { AuthProvider } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Tenant Trust — Trust, verified",
@@ -32,7 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="antialiased">
         <ThemeProvider>
-          <LocaleProvider>{children}</LocaleProvider>
+          <LocaleProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </LocaleProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Apple, Check } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { Button, Field, Input, SegmentedControl } from "@/components/ui/primitives";
 import { useT } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/lib/auth";
 
 type Role = "tenant" | "landlord";
 
@@ -25,6 +27,8 @@ const copy = {
     or: "or",
     agree: "I agree to the Terms & Privacy Policy.",
     create: "Create account",
+    creating: "Creating account…",
+    genericErr: "Could not create your account. Please try again.",
   },
   es: {
     title: "Crea tu cuenta",
@@ -40,6 +44,8 @@ const copy = {
     or: "o",
     agree: "Acepto los Términos y la Política de Privacidad.",
     create: "Crear cuenta",
+    creating: "Creando cuenta…",
+    genericErr: "No pudimos crear tu cuenta. Inténtalo de nuevo.",
   },
 };
 
@@ -54,15 +60,41 @@ function GoogleGlyph() {
 export default function RegisterScreen() {
   const c = useT(copy);
   const g = useT(common);
+  const router = useRouter();
+  const { signUp, signInWithOAuth, demoMode } = useAuth();
   const [role, setRole] = useState<Role>("tenant");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const roleOptions: { value: Role; label: string }[] = [
     { value: "tenant", label: g.roles.tenant },
     { value: "landlord", label: g.roles.landlord },
   ];
+
+  async function handleCreate() {
+    if (!agreed || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const { error } = await signUp(email, password, role);
+    if (error) {
+      setError(error);
+      setSubmitting(false);
+      return;
+    }
+    router.push("/verify-identity");
+  }
+
+  async function handleOAuth(provider: "google" | "apple") {
+    if (demoMode) {
+      router.push("/verify-identity");
+      return;
+    }
+    const { error } = await signInWithOAuth(provider);
+    if (error) setError(error);
+  }
 
   return (
     <AuthShell showLogo>
@@ -107,10 +139,24 @@ export default function RegisterScreen() {
       </div>
 
       <div className="space-y-3">
-        <Button variant="secondary" size="lg" full icon={<Apple className="h-5 w-5 text-ink" />}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="lg"
+          full
+          icon={<Apple className="h-5 w-5 text-ink" />}
+          onClick={() => handleOAuth("apple")}
+        >
           {c.apple}
         </Button>
-        <Button variant="secondary" size="lg" full icon={<GoogleGlyph />}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="lg"
+          full
+          icon={<GoogleGlyph />}
+          onClick={() => handleOAuth("google")}
+        >
           {c.google}
         </Button>
       </div>
@@ -132,15 +178,18 @@ export default function RegisterScreen() {
         <span className="text-[13px] leading-snug text-ink-soft">{c.agree}</span>
       </button>
 
-      {agreed ? (
-        <Button href="/verify-identity" size="lg" full className="mt-6">
-          {c.create}
-        </Button>
-      ) : (
-        <Button size="lg" full disabled className="mt-6">
-          {c.create}
-        </Button>
-      )}
+      {error && <p className="mt-4 text-[13px] font-medium text-danger">{error}</p>}
+
+      <Button
+        type="button"
+        size="lg"
+        full
+        disabled={!agreed || submitting}
+        onClick={handleCreate}
+        className="mt-6"
+      >
+        {submitting ? c.creating : c.create}
+      </Button>
     </AuthShell>
   );
 }

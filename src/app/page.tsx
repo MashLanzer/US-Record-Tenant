@@ -7,15 +7,20 @@ import { Shield, Lock } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { ThemeToggle, LangToggle } from "@/components/toggles";
+import { useAuth } from "@/lib/auth";
 
 export default function SplashScreen() {
   const router = useRouter();
   const t = useT(common);
+  const { loading, user, demoMode } = useAuth();
 
   useEffect(() => {
-    const id = setTimeout(() => router.push("/welcome"), 1900);
+    // In demo mode always show onboarding; otherwise route by session.
+    const dest = demoMode ? "/welcome" : loading ? null : user ? "/home" : "/welcome";
+    if (!dest) return;
+    const id = setTimeout(() => router.push(dest), 1900);
     return () => clearTimeout(id);
-  }, [router]);
+  }, [router, loading, user, demoMode]);
 
   return (
     <div

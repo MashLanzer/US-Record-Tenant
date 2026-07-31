@@ -6,6 +6,7 @@ import { Check } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { Button, Field, Input } from "@/components/ui/primitives";
 import { useT } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 
 const copy = {
   en: {
@@ -32,8 +33,19 @@ const copy = {
 
 export default function ForgotPasswordScreen() {
   const c = useT(copy);
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    // Always show the same confirmation (don't reveal whether an account exists).
+    await resetPassword(email);
+    setSubmitting(false);
+    setSent(true);
+  }
 
   if (sent) {
     return (
@@ -66,13 +78,7 @@ export default function ForgotPasswordScreen() {
         <p className="mt-1.5 text-[15px] leading-relaxed text-ink-faint">{c.subtitle}</p>
       </div>
 
-      <form
-        className="space-y-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSent(true);
-        }}
-      >
+      <form className="space-y-5" onSubmit={handleSubmit}>
         <Field label={c.email}>
           <Input
             type="email"
@@ -84,7 +90,7 @@ export default function ForgotPasswordScreen() {
           />
         </Field>
 
-        <Button type="submit" size="lg" full>
+        <Button type="submit" size="lg" full disabled={submitting}>
           {c.send}
         </Button>
       </form>

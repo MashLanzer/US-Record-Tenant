@@ -11,6 +11,7 @@
     "cap:sync": "next build && npx cap sync"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.111.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",
     "motion": "^11.15.0",

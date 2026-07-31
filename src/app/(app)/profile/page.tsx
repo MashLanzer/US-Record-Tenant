@@ -20,6 +20,7 @@ import { TrustRing, FactorBars } from "@/components/ui/trust";
 import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
+import { useAuth } from "@/lib/auth";
 import { me, trustFactors, verifications } from "@/lib/mock";
 
 const copy = {
@@ -73,6 +74,7 @@ export default function ProfileScreen() {
   const c = useT(copy);
   const g = useT(common);
   const { locale } = useLocale();
+  const { signOut } = useAuth();
 
   const verifiedChips = verifications.filter((v) => v.state === "verified");
 
@@ -167,7 +169,7 @@ export default function ProfileScreen() {
             <ListRow
               icon={<LogOut className="h-5 w-5" />}
               title={<span className="text-danger">{c.logout}</span>}
-              href="/login"
+              onClick={signOut}
               tone="danger"
             />
           </div>
