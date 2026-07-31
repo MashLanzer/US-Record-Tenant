@@ -10,6 +10,8 @@ import {
   payments as mockPayments,
   searchResults as mockSearchResults,
   timeline as mockTimeline,
+  notifications as mockNotifications,
+  conversations as mockConversations,
 } from "@/lib/mock";
 
 export type Rental = {
@@ -102,6 +104,7 @@ export async function createRental(userId: string, input: NewRentalInput): Promi
     .single();
   if (e2 || !lease) throw new Error(e2?.message ?? "Could not create lease");
 
+  await notify(userId, "contract_added", { address: input.address });
   return lease.id as string;
 }
 
@@ -223,6 +226,9 @@ export async function createPayment(
     status: input.status,
   });
   if (error) throw new Error(error.message);
+
+  const { data: u } = await typed.auth.getUser();
+  if (u.user) await notify(u.user.id, "payment_recorded", { amount: input.amount });
 }
 
 export type SearchItem = {
@@ -352,4 +358,218 @@ export function formatMonthYear(date: string | null, locale: Locale): string {
   if (!y || !m) return date;
   const d = new Date(y, m - 1, 1);
   return d.toLocaleDateString(locale === "es" ? "es-ES" : "en-US", { month: "short", year: "numeric" });
+}
+
+function shortDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return iso;
+  }
+}
+
+/* --------------------------------------------------------------- notifications */
+export type NotificationItem = {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+  read: boolean;
+  timeLabel: string;
+};
+
+export async function fetchNotifications(userId: string): Promise<NotificationItem[]> {
+  const sb = getSupabase();
+  if (!sb) {
+    return mockNotifications.map((n) => ({
+      id: n.id,
+      type: n.type,
+      data: { titleEn: n.titleEn, titleEs: n.titleEs },
+      read: !n.unread,
+      timeLabel: n.time,
+    }));
+  }
+  const { data, error } = await sb
+    .from("notifications")
+    .select("id, type, data, read, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error || !data) return [];
+  return data.map((n: Record<string, unknown>) => ({
+    id: n.id as string,
+    type: (n.type as string) ?? "system",
+    data: (n.data as Record<string, unknown>) ?? {},
+    read: Boolean(n.read),
+    timeLabel: shortDate((n.created_at as string) ?? ""),
+  }));
+}
+
+export async function markNotificationsRead(userId: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) return;
+  const db = typed as unknown as SupabaseClient;
+  await db.from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
+}
+
+/** Best-effort notification insert (self). Never throws. */
+async function notify(userId: string, type: string, data: Record<string, unknown> = {}): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) return;
+  try {
+    const db = typed as unknown as SupabaseClient;
+    await db.from("notifications").insert({ user_id: userId, type, data });
+  } catch {
+    /* ignore */
+  }
+}
+
+export function describeNotification(
+  item: NotificationItem,
+  locale: Locale,
+): { title: string; desc: string; tone: "verify" | "brand" | "amber" | "danger" } {
+  const es = locale === "es";
+  const d = item.data;
+  if (d.titleEn || d.titleEs) {
+    return { title: (es ? (d.titleEs as string) : (d.titleEn as string)) ?? "", desc: "", tone: "brand" };
+  }
+  switch (item.type) {
+    case "welcome":
+      return {
+        title: es ? "Bienvenido a Tenant Trust" : "Welcome to Tenant Trust",
+        desc: es ? "Verifica tu identidad para subir tu índice de confianza." : "Verify your identity to boost your trust score.",
+        tone: "brand",
+      };
+    case "contract_added":
+      return {
+        title: es ? "Contrato añadido" : "Contract added",
+        desc: (d.address as string) ?? "",
+        tone: "verify",
+      };
+    case "payment_recorded":
+      return {
+        title: es ? "Pago registrado" : "Payment recorded",
+        desc: d.amount ? `$${Number(d.amount).toLocaleString()}` : "",
+        tone: "verify",
+      };
+    case "message":
+      return {
+        title: es ? "Nuevo mensaje" : "New message",
+        desc: (d.from as string) ?? "",
+        tone: "brand",
+      };
+    default:
+      return { title: item.type, desc: "", tone: "brand" };
+  }
+}
+
+/* ----------------------------------------------------------------- messaging */
+export type ConversationItem = {
+  id: string;
+  otherName: string;
+  otherInitials: string;
+  otherVerified: boolean;
+  lastBody: string;
+  timeLabel: string;
+};
+
+export type MessageItem = { id: string; body: string; mine: boolean; timeLabel: string };
+
+export async function fetchConversations(userId: string): Promise<ConversationItem[]> {
+  const sb = getSupabase();
+  if (!sb) {
+    return mockConversations.map((c) => ({
+      id: c.id,
+      otherName: c.name,
+      otherInitials: c.initials,
+      otherVerified: c.verified,
+      lastBody: c.lastEn,
+      timeLabel: c.time,
+    }));
+  }
+
+  const { data: convs } = await sb
+    .from("conversations")
+    .select("id, user_a, user_b, created_at")
+    .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+    .order("created_at", { ascending: false });
+  if (!convs || convs.length === 0) return [];
+
+  const convRows = convs as Array<Record<string, unknown>>;
+  const otherIds = convRows.map((c) => (c.user_a === userId ? c.user_b : c.user_a) as string);
+  const convIds = convRows.map((c) => c.id as string);
+
+  const [{ data: profs }, { data: msgs }] = await Promise.all([
+    sb.from("profiles").select("id, full_name, avatar_initials, identity_verified").in("id", otherIds),
+    sb.from("messages").select("conversation_id, body, created_at").in("conversation_id", convIds).order("created_at", { ascending: false }),
+  ]);
+
+  const profMap = new Map((profs ?? []).map((p: Record<string, unknown>) => [p.id as string, p]));
+  const lastByConv = new Map<string, Record<string, unknown>>();
+  for (const m of (msgs ?? []) as Array<Record<string, unknown>>) {
+    const cid = m.conversation_id as string;
+    if (!lastByConv.has(cid)) lastByConv.set(cid, m);
+  }
+
+  return convRows.map((c) => {
+    const otherId = (c.user_a === userId ? c.user_b : c.user_a) as string;
+    const prof = profMap.get(otherId) as Record<string, unknown> | undefined;
+    const last = lastByConv.get(c.id as string);
+    return {
+      id: c.id as string,
+      otherName: (prof?.full_name as string) || "—",
+      otherInitials: (prof?.avatar_initials as string) || "?",
+      otherVerified: Boolean(prof?.identity_verified),
+      lastBody: (last?.body as string) ?? "",
+      timeLabel: last ? shortDate(last.created_at as string) : shortDate(c.created_at as string),
+    };
+  });
+}
+
+/** Find or create the conversation between the current user and another user. */
+export async function fetchOrCreateConversation(userId: string, otherId: string): Promise<string> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const [a, b] = [userId, otherId].sort();
+
+  const { data: existing } = await db
+    .from("conversations")
+    .select("id")
+    .eq("user_a", a)
+    .eq("user_b", b)
+    .maybeSingle();
+  if (existing?.id) return existing.id as string;
+
+  const { data: created, error } = await db
+    .from("conversations")
+    .insert({ user_a: a, user_b: b })
+    .select("id")
+    .single();
+  if (error || !created) throw new Error(error?.message ?? "Could not start conversation");
+  return created.id as string;
+}
+
+export async function fetchMessages(convId: string, userId: string): Promise<MessageItem[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("messages")
+    .select("id, body, sender_id, created_at")
+    .eq("conversation_id", convId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map((m: Record<string, unknown>) => ({
+    id: m.id as string,
+    body: (m.body as string) ?? "",
+    mine: m.sender_id === userId,
+    timeLabel: shortDate((m.created_at as string) ?? ""),
+  }));
+}
+
+export async function sendMessage(convId: string, userId: string, body: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.from("messages").insert({ conversation_id: convId, sender_id: userId, body });
+  if (error) throw new Error(error.message);
 }

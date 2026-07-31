@@ -1,21 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Sparkles,
   ShieldCheck,
-  AlertTriangle,
   CreditCard,
   MessageSquare,
-  ChevronRight,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
-import { Card, SegmentedControl } from "@/components/ui/primitives";
+import { Card, SegmentedControl, Skeleton } from "@/components/ui/primitives";
+import { EmptyState } from "@/components/ui/empty";
 import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { cn } from "@/lib/cn";
 import { useT, useLocale } from "@/lib/i18n";
-import { notifications, type Notification } from "@/lib/mock";
+import { useAuth } from "@/lib/auth";
+import {
+  fetchNotifications,
+  markNotificationsRead,
+  describeNotification,
+  type NotificationItem,
+} from "@/lib/data";
 
 const copy = {
   en: {
@@ -23,38 +30,59 @@ const copy = {
     all: "All",
     unread: "Unread",
     markAll: "Mark all read",
-    empty: "You're all caught up.",
+    emptyTitle: "You're all caught up",
+    emptyDesc: "New activity on your records will show up here.",
   },
   es: {
     title: "Notificaciones",
     all: "Todas",
     unread: "No leídas",
     markAll: "Marcar todas como leídas",
-    empty: "Estás al día.",
+    emptyTitle: "Estás al día",
+    emptyDesc: "La nueva actividad de tus registros aparecerá aquí.",
   },
 };
 
-type NType = Notification["type"];
+const TYPE_ICON: Record<string, LucideIcon> = {
+  welcome: Sparkles,
+  contract_added: ShieldCheck,
+  payment_recorded: CreditCard,
+  message: MessageSquare,
+};
 
-const TYPE_META: Record<
-  NType,
-  { icon: LucideIcon; iconCls: string; actionable: boolean }
-> = {
-  verify: { icon: ShieldCheck, iconCls: "bg-verify-tint text-verify", actionable: true },
-  dispute: { icon: AlertTriangle, iconCls: "bg-amber-tint text-amber", actionable: true },
-  payment: { icon: CreditCard, iconCls: "bg-brand-tint text-brand", actionable: false },
-  message: { icon: MessageSquare, iconCls: "bg-surface-3 text-ink-soft", actionable: false },
+const TONE_CLS: Record<"verify" | "brand" | "amber" | "danger", string> = {
+  verify: "bg-verify-tint text-verify",
+  brand: "bg-brand-tint text-brand",
+  amber: "bg-amber-tint text-amber",
+  danger: "bg-danger-tint text-danger",
 };
 
 export default function NotificationsScreen() {
   const c = useT(copy);
   const { locale } = useLocale();
+  const { user } = useAuth();
   const [tab, setTab] = useState<"all" | "unread">("all");
-  const [read, setRead] = useState<Set<string>>(new Set());
+  const [items, setItems] = useState<NotificationItem[] | null>(null);
 
-  const isUnread = (n: Notification) => n.unread && !read.has(n.id);
-  const list = notifications.filter((n) => (tab === "unread" ? isUnread(n) : true));
-  const markAll = () => setRead(new Set(notifications.map((n) => n.id)));
+  useEffect(() => {
+    let alive = true;
+    if (!user) return;
+    fetchNotifications(user.id).then((n) => {
+      if (alive) setItems(n);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [user]);
+
+  const loading = items === null;
+  const list = (items ?? []).filter((n) => (tab === "unread" ? !n.read : true));
+
+  const markAll = () => {
+    if (!user) return;
+    markNotificationsRead(user.id);
+    setItems((prev) => (prev ? prev.map((n) => ({ ...n, read: true })) : prev));
+  };
 
   return (
     <>
@@ -78,28 +106,41 @@ export default function NotificationsScreen() {
             </button>
           </div>
 
-          <Card className="mt-4 divide-y divide-line p-2">
-            {list.length === 0 ? (
-              <div className="px-3 py-10 text-center text-[14px] text-ink-faint">{c.empty}</div>
-            ) : (
+          {loading ? (
+            <Card className="mt-4 divide-y divide-line p-2">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-3 p-2.5">
+                  <Skeleton className="h-11 w-11 shrink-0 rounded-xl" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-3.5 w-2/3 rounded" />
+                    <Skeleton className="h-3 w-1/3 rounded" />
+                  </div>
+                </div>
+              ))}
+            </Card>
+          ) : list.length === 0 ? (
+            <div className="mt-6">
+              <EmptyState icon={<Bell />} title={c.emptyTitle} description={c.emptyDesc} />
+            </div>
+          ) : (
+            <Card className="mt-4 divide-y divide-line p-2">
               <Stagger>
                 {list.map((n) => {
-                  const meta = TYPE_META[n.type];
-                  const Icon = meta.icon;
-                  const unread = isUnread(n);
+                  const { title, desc, tone } = describeNotification(n, locale);
+                  const Icon = TYPE_ICON[n.type] ?? Bell;
+                  const unread = !n.read;
                   return (
                     <StaggerItem key={n.id}>
-                      <button
-                        onClick={() => setRead((prev) => new Set(prev).add(n.id))}
+                      <div
                         className={cn(
-                          "flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition-colors hover:bg-surface-2",
+                          "flex w-full items-center gap-3 rounded-xl p-2.5 text-left",
                           unread && "bg-surface-2/60",
                         )}
                       >
                         <span
                           className={cn(
                             "grid h-11 w-11 shrink-0 place-items-center rounded-xl",
-                            meta.iconCls,
+                            TONE_CLS[tone],
                           )}
                         >
                           <Icon className="h-[22px] w-[22px]" />
@@ -109,26 +150,25 @@ export default function NotificationsScreen() {
                             className={cn(
                               "text-[14.5px] leading-snug text-ink",
                               unread ? "font-bold" : "font-medium",
-                              meta.actionable && "text-ink",
                             )}
                           >
-                            {locale === "es" ? n.titleEs : n.titleEn}
+                            {title}
                           </div>
-                          <div className="mt-0.5 text-[12px] text-ink-faint tnum">{n.time}</div>
+                          {desc && (
+                            <div className="mt-0.5 truncate text-[13px] text-ink-soft">{desc}</div>
+                          )}
+                          <div className="mt-0.5 text-[12px] text-ink-faint tnum">{n.timeLabel}</div>
                         </div>
-                        {meta.actionable && !unread && (
-                          <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint" />
-                        )}
                         {unread && (
                           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-brand-600" />
                         )}
-                      </button>
+                      </div>
                     </StaggerItem>
                   );
                 })}
               </Stagger>
-            )}
-          </Card>
+            </Card>
+          )}
         </Screen>
       </PageFade>
     </>
