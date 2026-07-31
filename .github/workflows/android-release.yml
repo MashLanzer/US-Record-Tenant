@@ -1,0 +1,92 @@
+name: Android APK Release
+
+# Builds an installable Android APK from the web app (via Capacitor) and
+# publishes it as a GitHub Release, so you can download + sideload it to test.
+#
+# How to run:
+#   • Push a version tag:  git tag v0.1.0 && git push origin v0.1.0
+#   • OR go to the repo → Actions → "Android APK Release" → Run workflow.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    env:
+      # Public Supabase keys (safe in the client — protected by RLS). These let
+      # the APK talk to your backend. Move them to repo Secrets if you prefer.
+      NEXT_PUBLIC_SUPABASE_URL: https://yjqtcdeqqmtvfqcjoxld.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqcXRjZGVxcW10dmZxY2pveGxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MjI0MDcsImV4cCI6MjEwMTA5ODQwN30.mFXcl0erDLFhqM9LoMEccOWVNGIF6OzeqDMizM-IRoE
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web (static export → out/)
+        run: pnpm build
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync web assets into Android
+        run: npx cap sync android
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "tenant-trust-${{ steps.tag.outputs.value }}.apk"
+
+      - name: Publish GitHub Release with the APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.value }}
+          name: Tenant Trust ${{ steps.tag.outputs.value }}
+          body: |
+            **Installable Android test build (debug APK).**
+
+            1. Download `tenant-trust-*.apk` below on your Android phone.
+            2. Open it — allow "install from unknown sources" if prompted.
+            3. Launch **Tenant Trust** and log in.
+
+            Connected to the live Supabase backend. iOS testing is via the PWA
+            (open the site in Safari → Share → Add to Home Screen).
+          files: tenant-trust-${{ steps.tag.outputs.value }}.apk
