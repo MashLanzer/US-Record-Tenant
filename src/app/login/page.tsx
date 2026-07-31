@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ScanFace, Apple } from "lucide-react";
+import { ScanFace } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { Button, Field, Input } from "@/components/ui/primitives";
 import { useT } from "@/lib/i18n";
@@ -22,7 +22,6 @@ const copy = {
     genericErr: "Could not log in. Check your details and try again.",
     forgot: "Forgot password?",
     or: "or",
-    apple: "Continue with Apple",
     google: "Continue with Google",
   },
   es: {
@@ -38,7 +37,6 @@ const copy = {
     genericErr: "No pudimos iniciar sesión. Revisa tus datos e inténtalo de nuevo.",
     forgot: "¿Olvidaste tu contraseña?",
     or: "o",
-    apple: "Continuar con Apple",
     google: "Continuar con Google",
   },
 };
@@ -138,28 +136,16 @@ export default function LoginScreen() {
         <span className="h-px flex-1 bg-line" />
       </div>
 
-      <div className="space-y-3">
-        <Button
-          type="button"
-          variant="secondary"
-          size="lg"
-          full
-          icon={<Apple className="h-5 w-5 text-ink" />}
-          onClick={() => handleOAuth("apple")}
-        >
-          {c.apple}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="lg"
-          full
-          icon={<GoogleGlyph />}
-          onClick={() => handleOAuth("google")}
-        >
-          {c.google}
-        </Button>
-      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        size="lg"
+        full
+        icon={<GoogleGlyph />}
+        onClick={() => handleOAuth("google")}
+      >
+        {c.google}
+      </Button>
     </AuthShell>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Apple, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { Button, Field, Input, SegmentedControl } from "@/components/ui/primitives";
 import { useT } from "@/lib/i18n";
@@ -22,7 +22,6 @@ const copy = {
     password: "Password",
     passwordPh: "Create a password",
     passwordHint: "At least 8 characters.",
-    apple: "Continue with Apple",
     google: "Continue with Google",
     or: "or",
     agree: "I agree to the Terms & Privacy Policy.",
@@ -39,7 +38,6 @@ const copy = {
     password: "Contraseña",
     passwordPh: "Crea una contraseña",
     passwordHint: "Al menos 8 caracteres.",
-    apple: "Continuar con Apple",
     google: "Continuar con Google",
     or: "o",
     agree: "Acepto los Términos y la Política de Privacidad.",
@@ -138,28 +136,16 @@ export default function RegisterScreen() {
         <span className="h-px flex-1 bg-line" />
       </div>
 
-      <div className="space-y-3">
-        <Button
-          type="button"
-          variant="secondary"
-          size="lg"
-          full
-          icon={<Apple className="h-5 w-5 text-ink" />}
-          onClick={() => handleOAuth("apple")}
-        >
-          {c.apple}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="lg"
-          full
-          icon={<GoogleGlyph />}
-          onClick={() => handleOAuth("google")}
-        >
-          {c.google}
-        </Button>
-      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        size="lg"
+        full
+        icon={<GoogleGlyph />}
+        onClick={() => handleOAuth("google")}
+      >
+        {c.google}
+      </Button>
 
       <button
         type="button"
