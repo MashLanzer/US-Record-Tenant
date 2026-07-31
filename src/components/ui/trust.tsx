@@ -48,7 +48,11 @@ export function TrustRing({
   const arcColor =
     tone === "white" ? "#ffffff" : tone === "brand" ? "var(--brand)" : "var(--verify)";
   const trackColor = onDark ? "rgba(255,255,255,.22)" : "var(--surface-3)";
-  const inner = onDark ? "transparent" : "var(--surface)";
+  // On dark/brand cards the inner disc mirrors the card gradient so the ring
+  // reads as a thin donut with the number floating on the card (not a white blob).
+  const inner = onDark
+    ? "linear-gradient(135deg, var(--brand-600), var(--brand-700))"
+    : "var(--surface)";
 
   return (
     <div
