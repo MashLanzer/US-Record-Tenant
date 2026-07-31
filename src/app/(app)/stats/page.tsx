@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Screen } from "@/components/app-shell";
 import { AppHeader, SectionTitle } from "@/components/app-header";
-import { Card, StatCard, SegmentedControl } from "@/components/ui/primitives";
+import { Card, StatCard, SegmentedControl, Skeleton } from "@/components/ui/primitives";
 import { PageFade } from "@/components/motion";
-import { useT } from "@/lib/i18n";
+import { useT, useLocale } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
+import { fetchStats, type StatsData } from "@/lib/data";
 
 type Range = "6m" | "1y" | "all";
 
@@ -16,40 +18,50 @@ const copy = {
     range6m: "6M",
     range1y: "1Y",
     rangeAll: "All",
-    chartTitle: "Trust score over time",
+    chartTitle: "Rent paid per month",
+    noData: "No payment data yet",
     metrics: "Key metrics",
-    onTime: "On-time rate",
-    avgRating: "Avg rating",
-    verifications: "Verifications",
-    insight: "Your score rose 8 points in the last 6 months.",
+    trustScore: "Trust score",
+    rentals: "Rentals",
+    onTime: "On-time",
+    totalPaid: "Total paid",
+    insight: "Your on-time payments are the biggest driver of your trust score.",
   },
   es: {
     title: "Estadísticas",
     range6m: "6M",
     range1y: "1A",
     rangeAll: "Todo",
-    chartTitle: "Score de confianza en el tiempo",
+    chartTitle: "Renta pagada por mes",
+    noData: "Aún no hay datos de pago",
     metrics: "Métricas clave",
-    onTime: "Pagos a tiempo",
-    avgRating: "Calificación media",
-    verifications: "Verificaciones",
-    insight: "Tu score subió 8 puntos en los últimos 6 meses.",
+    trustScore: "Score de confianza",
+    rentals: "Alquileres",
+    onTime: "A tiempo",
+    totalPaid: "Total pagado",
+    insight: "Tus pagos a tiempo son el mayor impulsor de tu score de confianza.",
   },
-};
-
-// Normalized bar heights (0–100) per range — a gentle upward trend.
-const SERIES: Record<Range, number[]> = {
-  "6m": [62, 66, 70, 74, 80, 84, 88, 92],
-  "1y": [54, 58, 63, 66, 72, 78, 84, 92],
-  all: [40, 48, 55, 62, 70, 78, 85, 92],
 };
 
 export default function StatsScreen() {
   const c = useT(copy);
+  const { locale } = useLocale();
+  const { user } = useAuth();
   const [range, setRange] = useState<Range>("6m");
+  const [data, setData] = useState<StatsData | null>(null);
 
-  const bars = SERIES[range];
-  const max = Math.max(...bars);
+  useEffect(() => {
+    let alive = true;
+    if (!user) return;
+    fetchStats(user.id, locale).then((d) => {
+      if (alive) setData(d);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [user, locale]);
+
+  const loading = data === null;
 
   const options = [
     { value: "6m" as const, label: c.range6m },
@@ -57,49 +69,89 @@ export default function StatsScreen() {
     { value: "all" as const, label: c.rangeAll },
   ];
 
+  const monthly = data?.monthly ?? [];
+  const maxAmount = monthly.reduce((m, x) => Math.max(m, x.amount), 0);
+
   return (
     <>
       <AppHeader title={c.title} back />
       <PageFade>
         <Screen>
-          {/* Range control */}
+          {/* Range control (decorative) */}
           <SegmentedControl className="w-full" options={options} value={range} onChange={setRange} />
 
-          {/* Bar chart */}
-          <Card className="mt-4 p-5">
-            <div className="text-[13px] font-bold text-ink">{c.chartTitle}</div>
-            <div className="relative mt-5">
-              <div className="flex h-40 items-end justify-between gap-2">
-                {bars.map((h, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-t-md bg-[linear-gradient(180deg,var(--brand-500),var(--brand-700))] transition-all duration-500"
-                    style={{ height: `${(h / max) * 100}%` }}
-                  />
-                ))}
+          {loading ? (
+            <div className="mt-4 space-y-4">
+              <Skeleton className="h-[220px] w-full rounded-2xl" />
+              <div className="flex gap-3">
+                <Skeleton className="h-[84px] flex-1 rounded-2xl" />
+                <Skeleton className="h-[84px] flex-1 rounded-2xl" />
               </div>
-              {/* baseline */}
-              <div className="mt-0 h-px w-full bg-line-strong" />
             </div>
-          </Card>
+          ) : (
+            <>
+              {/* Bar chart */}
+              <Card className="mt-4 p-5">
+                <div className="text-[13px] font-bold text-ink">{c.chartTitle}</div>
+                {monthly.length === 0 ? (
+                  <div className="mt-6 grid h-32 place-items-center text-[13px] text-ink-faint">
+                    {c.noData}
+                  </div>
+                ) : (
+                  <div className="mt-5">
+                    <div className="relative flex h-40 items-end justify-between gap-2">
+                      {monthly.map((bar, i) => (
+                        <div
+                          key={i}
+                          className="w-full rounded-t-md bg-[linear-gradient(180deg,var(--brand-500),var(--brand-700))] transition-all duration-500"
+                          style={{ height: `${maxAmount > 0 ? Math.max(4, (bar.amount / maxAmount) * 100) : 0}%` }}
+                        />
+                      ))}
+                    </div>
+                    {/* baseline */}
+                    <div className="h-px w-full bg-line" />
+                    {/* x-labels */}
+                    <div className="mt-2 flex justify-between gap-2">
+                      {monthly.map((bar, i) => (
+                        <div
+                          key={i}
+                          className="w-full truncate text-center text-[11px] font-medium text-ink-faint tnum"
+                        >
+                          {bar.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
 
-          {/* KPIs */}
-          <SectionTitle>{c.metrics}</SectionTitle>
-          <div className="flex gap-3">
-            <StatCard label={c.onTime} value="100%" tone="verify" />
-            <StatCard label={c.avgRating} value="92" tone="brand" />
-            <StatCard label={c.verifications} value="3" />
-          </div>
+              {/* KPIs */}
+              <SectionTitle>{c.metrics}</SectionTitle>
+              <div className="grid grid-cols-2 gap-3">
+                <StatCard label={c.trustScore} value={<span className="tnum">{data.score}</span>} tone="brand" />
+                <StatCard label={c.rentals} value={<span className="tnum">{data.rentals}</span>} />
+                <StatCard
+                  label={c.onTime}
+                  value={<span className="tnum">{data.onTimeRate}%</span>}
+                  tone="verify"
+                />
+                <StatCard
+                  label={c.totalPaid}
+                  value={<span className="tnum">${data.totalPaid.toLocaleString()}</span>}
+                />
+              </div>
 
-          {/* Insight banner */}
-          <Card className="mt-4 flex items-start gap-3 border-brand/20 bg-brand-tint p-4">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-white">
-              <Sparkles className="h-5 w-5" />
-            </span>
-            <p className="min-w-0 self-center text-[14px] font-semibold leading-relaxed text-ink">
-              {c.insight}
-            </p>
-          </Card>
+              {/* Insight banner */}
+              <Card className="mt-4 flex items-start gap-3 border-brand/20 bg-brand-tint p-4">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-white">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <p className="min-w-0 self-center text-[14px] font-semibold leading-relaxed text-ink">
+                  {c.insight}
+                </p>
+              </Card>
+            </>
+          )}
         </Screen>
       </PageFade>
     </>

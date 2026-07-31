@@ -1,41 +1,95 @@
 "use client";
 
-import { ShieldCheck, Check, MessageSquare, Send } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ShieldCheck, ShieldQuestion, MessageSquare, Send } from "lucide-react";
 import { Screen } from "@/components/app-shell";
 import { AppHeader } from "@/components/app-header";
-import { Avatar, Card, Chip, Button } from "@/components/ui/primitives";
+import { Avatar, Card, Chip, Button, Skeleton } from "@/components/ui/primitives";
 import { TrustRing } from "@/components/ui/trust";
-import { PageFade, Stagger, StaggerItem } from "@/components/motion";
+import { PageFade } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
-import { publicProfile } from "@/lib/mock";
+import { common } from "@/lib/i18n/common";
+import { useAuth } from "@/lib/auth";
+import { fetchPublicProfile, recordProfileView, type PublicProfileData } from "@/lib/data";
 
 const copy = {
   en: {
     title: "Trust profile",
-    verifiedChip: "Identity + 2 leases verified",
+    verified: "Identity verified",
+    unverified: "Unverified",
     indexLabel: "Trust Index",
-    punctuality: "Payment punctuality",
-    excellent: "Excellent",
-    highlights: "What tenants and landlords say",
+    memberSince: "Member since",
+    message: "Message",
     request: "Request rental",
-    contact: "Contact",
+    notFound: "Profile not found",
   },
   es: {
     title: "Perfil de confianza",
-    verifiedChip: "Identidad + 2 contratos verificados",
+    verified: "Identidad verificada",
+    unverified: "Sin verificar",
     indexLabel: "Índice de confianza",
-    punctuality: "Puntualidad de pago",
-    excellent: "Excelente",
-    highlights: "Lo que dicen inquilinos y propietarios",
+    memberSince: "Miembro desde",
+    message: "Mensaje",
     request: "Solicitar alquiler",
-    contact: "Contactar",
+    notFound: "Perfil no encontrado",
   },
 };
 
 export default function PublicTrustScreen() {
   const c = useT(copy);
+  const g = useT(common);
   const { locale } = useLocale();
-  const highlights = locale === "es" ? publicProfile.highlightsEs : publicProfile.highlightsEn;
+  const { user } = useAuth();
+
+  const [profile, setProfile] = useState<PublicProfileData | null | undefined>(undefined);
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("id") ?? "";
+    let alive = true;
+    fetchPublicProfile(id).then((p) => alive && setProfile(p));
+    // Transparency: record that the current user looked at this profile.
+    if (user && id && id !== user.id) {
+      void recordProfileView(user.id, id);
+    }
+    return () => {
+      alive = false;
+    };
+  }, [user]);
+
+  if (profile === undefined) {
+    return (
+      <>
+        <AppHeader title={c.title} back />
+        <PageFade>
+          <Screen>
+            <div className="flex flex-col items-center pt-4">
+              <Skeleton className="h-[72px] w-[72px] rounded-[28%]" />
+              <Skeleton className="mt-3 h-6 w-40 rounded-full" />
+              <Skeleton className="mt-2 h-6 w-32 rounded-full" />
+            </div>
+            <Skeleton className="mt-5 h-64 w-full rounded-2xl" />
+            <Skeleton className="mt-6 h-12 w-full rounded-xl" />
+          </Screen>
+        </PageFade>
+      </>
+    );
+  }
+
+  if (profile === null) {
+    return (
+      <>
+        <AppHeader title={c.title} back />
+        <PageFade>
+          <Screen>
+            <p className="mt-16 text-center text-[15px] text-ink-faint">{c.notFound}</p>
+          </Screen>
+        </PageFade>
+      </>
+    );
+  }
+
+  const p = profile;
+  const roleLabel = p.role === "landlord" ? g.roles.landlord : g.roles.tenant;
 
   return (
     <>
@@ -44,69 +98,42 @@ export default function PublicTrustScreen() {
         <Screen>
           {/* Hero */}
           <div className="flex flex-col items-center pt-3 text-center">
-            <Avatar initials={publicProfile.initials} size={72} verified />
-            <h1 className="mt-3 text-[26px] font-extrabold tracking-tight text-ink">
-              {publicProfile.name}
-            </h1>
+            <Avatar initials={p.initials} size={72} verified={p.verified} />
+            <h1 className="mt-3 text-[26px] font-extrabold tracking-tight text-ink">{p.name}</h1>
             <div className="mt-2">
-              <Chip tone="verify" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
-                {c.verifiedChip}
-              </Chip>
+              {p.verified ? (
+                <Chip tone="verify" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
+                  {c.verified}
+                </Chip>
+              ) : (
+                <Chip tone="neutral" icon={<ShieldQuestion className="h-3.5 w-3.5" />}>
+                  {c.unverified}
+                </Chip>
+              )}
             </div>
           </div>
 
           {/* Score card */}
           <Card className="mt-5 flex flex-col items-center p-6 text-center">
-            <TrustRing score={publicProfile.trustScore} size={128} />
+            <TrustRing score={p.score} size={128} />
             <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
               {c.indexLabel}
             </div>
-            <p className="mt-1 text-[15px] font-semibold text-ink">
-              {locale === "es" ? publicProfile.descEs : publicProfile.descEn}
-            </p>
-          </Card>
-
-          {/* Punctuality bar */}
-          <Card className="mt-3 p-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-[13px] font-semibold text-ink">{c.punctuality}</span>
-              <span className="text-[13px] font-bold text-verify">{c.excellent}</span>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <Chip tone="brand">{roleLabel}</Chip>
+              <span className="text-[13px] text-ink-faint tnum">
+                {c.memberSince} {p.memberYear}
+              </span>
             </div>
-            <div className="h-[9px] overflow-hidden rounded-full bg-surface-3">
-              <div className="h-full rounded-full bg-verify" style={{ width: "97%" }} />
-            </div>
-          </Card>
-
-          {/* Highlights */}
-          <div className="mt-6 mb-2.5 text-[13px] font-bold uppercase tracking-wider text-ink-faint">
-            {c.highlights}
-          </div>
-          <Card className="p-2">
-            <Stagger>
-              {highlights.map((h, i) => (
-                <StaggerItem key={i}>
-                  <div
-                    className={`flex items-center gap-3 px-2 py-2.5 ${
-                      i > 0 ? "border-t border-line" : ""
-                    }`}
-                  >
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-verify-tint text-verify">
-                      <Check className="h-4 w-4" strokeWidth={3} />
-                    </span>
-                    <span className="text-[14px] font-medium text-ink">{h}</span>
-                  </div>
-                </StaggerItem>
-              ))}
-            </Stagger>
           </Card>
 
           {/* Actions */}
           <div className="mt-6 flex flex-col gap-2.5">
-            <Button full icon={<Send className="h-[18px] w-[18px]" />}>
-              {c.request}
+            <Button href="/messages/new" full icon={<Send className="h-[18px] w-[18px]" />}>
+              {c.message}
             </Button>
             <Button variant="ghost" full icon={<MessageSquare className="h-[18px] w-[18px]" />}>
-              {c.contact}
+              {c.request}
             </Button>
           </div>
         </Screen>
