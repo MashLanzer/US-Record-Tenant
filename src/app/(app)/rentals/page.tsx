@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Plus, ShieldCheck, Clock, ScrollText } from "lucide-react";
 import { Screen } from "@/components/app-shell";
 import { Card, Button, Chip, Skeleton } from "@/components/ui/primitives";
@@ -129,8 +130,9 @@ export default function RentalsScreen() {
                 }`;
                 return (
                   <StaggerItem key={r.id}>
-                    <Card className="p-4">
-                      <div className="flex items-start gap-3">
+                    <Link href={`/property?id=${r.id}`} className="block">
+                      <Card className="p-4 transition-all hover:shadow-[var(--shadow-2)] active:scale-[.99]">
+                        <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[15px] font-bold text-ink">{r.address}</div>
                           <div className="mt-0.5 text-[13px] text-ink-faint">{r.city}</div>
@@ -153,12 +155,13 @@ export default function RentalsScreen() {
                             {r.relation === "landlord" ? c.asLandlord : c.asTenant}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 whitespace-nowrap">
-                          <span className="text-[15px] font-bold text-ink tnum">${r.rent.toLocaleString()}</span>
-                          <span className="text-[13px] text-ink-faint">{c.perMonth}</span>
+                          <div className="flex items-center gap-1 whitespace-nowrap">
+                            <span className="text-[15px] font-bold text-ink tnum">${r.rent.toLocaleString()}</span>
+                            <span className="text-[13px] text-ink-faint">{c.perMonth}</span>
+                          </div>
                         </div>
-                      </div>
-                    </Card>
+                      </Card>
+                    </Link>
                   </StaggerItem>
                 );
               })}

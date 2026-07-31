@@ -1,126 +1,130 @@
 "use client";
 
-import { Download, TrendingUp, Check, Clock, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CreditCard, Sparkles, CircleDollarSign } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
-import { Card, Button, Chip } from "@/components/ui/primitives";
+import { Card, Button, Skeleton } from "@/components/ui/primitives";
+import { EmptyState } from "@/components/ui/empty";
 import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
-import { payments } from "@/lib/mock";
+import { useAuth } from "@/lib/auth";
+import { fetchMyPayments, formatMonthYear, type PaymentItem } from "@/lib/data";
 
 const copy = {
   en: {
     title: "Payment history",
     onTime: "on-time",
-    summarySub: (ok: number, total: number) => `${ok} of ${total} payments on time · bank-verified`,
+    summarySub: (ok: number, total: number) => `${ok} of ${total} payments on time`,
     onTimeLabel: "On time",
     lateLabel: "Late",
     export: "Export",
-    reportBureau: "Report to bureau",
-    premiumHint: "Premium",
+    emptyTitle: "No payments yet",
+    emptyDesc: "Record rent payments from a property to build your verified payment record.",
+    goToRecords: "Go to Records",
   },
   es: {
     title: "Historial de pagos",
     onTime: "a tiempo",
-    summarySub: (ok: number, total: number) => `${ok} de ${total} pagos a tiempo · verificado por banco`,
+    summarySub: (ok: number, total: number) => `${ok} de ${total} pagos a tiempo`,
     onTimeLabel: "A tiempo",
     lateLabel: "Tardío",
     export: "Exportar",
-    reportBureau: "Reportar al buró",
-    premiumHint: "Premium",
+    emptyTitle: "Aún no hay pagos",
+    emptyDesc: "Registra pagos de renta desde una propiedad para construir tu historial verificado.",
+    goToRecords: "Ir a Historial",
   },
 };
 
 export default function PaymentsScreen() {
   const c = useT(copy);
   const { locale } = useLocale();
+  const { user } = useAuth();
+  const [items, setItems] = useState<PaymentItem[] | null>(null);
 
-  const total = payments.length;
-  const onTime = payments.filter((p) => p.status === "onTime").length;
-  const pct = Math.round((onTime / total) * 100);
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    fetchMyPayments(user.id).then((p) => alive && setItems(p));
+    return () => {
+      alive = false;
+    };
+  }, [user]);
+
+  const total = items?.length ?? 0;
+  const ok = items?.filter((p) => p.status === "onTime").length ?? 0;
+  const rate = total > 0 ? Math.round((ok / total) * 100) : 0;
 
   return (
     <>
       <AppHeader title={c.title} back />
       <PageFade>
         <Screen>
-          {/* Summary */}
-          <Card className="p-5">
-            <div className="flex items-baseline gap-2">
-              <span className="text-[40px] font-extrabold leading-none tracking-tight text-verify tnum">
-                {pct}%
-              </span>
-              <span className="text-[16px] font-semibold text-ink-soft">{c.onTime}</span>
-              <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-verify-tint px-2.5 py-1 text-[11px] font-semibold text-verify">
-                <TrendingUp className="h-3.5 w-3.5" />
-              </span>
+          {items === null ? (
+            <div className="space-y-3">
+              <Skeleton className="h-28 w-full rounded-2xl" />
+              <Skeleton className="h-16 w-full rounded-2xl" />
+              <Skeleton className="h-16 w-full rounded-2xl" />
             </div>
-            {/* Meter */}
-            <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-surface-3">
-              <div
-                className="h-full rounded-full bg-verify transition-all"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <p className="mt-3 text-[13px] text-ink-faint">{c.summarySub(onTime, total)}</p>
-          </Card>
+          ) : total === 0 ? (
+            <EmptyState
+              icon={<CircleDollarSign />}
+              title={c.emptyTitle}
+              description={c.emptyDesc}
+              action={<Button href="/rentals">{c.goToRecords}</Button>}
+            />
+          ) : (
+            <>
+              {/* Summary */}
+              <Card className="p-5">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <div className="text-[40px] font-extrabold leading-none text-verify tnum">{rate}%</div>
+                    <div className="mt-1 text-[13px] text-ink-faint">{c.summarySub(ok, total)}</div>
+                  </div>
+                  <Sparkles className="h-6 w-6 text-verify" />
+                </div>
+                <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-surface-3">
+                  <div className="h-full rounded-full bg-verify" style={{ width: `${rate}%` }} />
+                </div>
+              </Card>
 
-          {/* Payment list */}
-          <Card className="mt-4 p-0">
-            <Stagger className="divide-y divide-line">
-              {payments.map((p) => {
-                const late = p.status === "late";
-                return (
-                  <StaggerItem key={p.id}>
-                    <div className="flex items-center gap-3 px-4 py-3.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[15px] font-semibold text-ink">
-                          {locale === "es" ? p.monthEs : p.monthEn}
+              {/* List */}
+              <Stagger className="mt-4 space-y-2">
+                {items.map((p) => {
+                  const label =
+                    p.dueDate ? formatMonthYear(p.dueDate, locale) : locale === "es" ? p.monthEs : p.monthEn;
+                  return (
+                    <StaggerItem key={p.id}>
+                      <Card className="flex items-center gap-3 p-3.5">
+                        <span
+                          className={
+                            "grid h-10 w-10 shrink-0 place-items-center rounded-xl " +
+                            (p.status === "onTime" ? "bg-verify-tint text-verify" : "bg-amber-tint text-amber")
+                          }
+                        >
+                          <CreditCard className="h-5 w-5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[15px] font-semibold text-ink">{label}</div>
+                          <div className="text-[12.5px] text-ink-faint">
+                            {p.status === "onTime" ? c.onTimeLabel : c.lateLabel}
+                          </div>
                         </div>
-                        <div className="text-[13px] text-ink-faint tnum">{p.date}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[15px] font-bold text-ink tnum">
-                          ${p.amount.toLocaleString()}
-                        </div>
-                      </div>
-                      <Chip
-                        tone={late ? "pending" : "verify"}
-                        icon={
-                          late ? <Clock className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />
-                        }
-                      >
-                        {late ? c.lateLabel : c.onTimeLabel}
-                      </Chip>
-                    </div>
-                  </StaggerItem>
-                );
-              })}
-            </Stagger>
-          </Card>
+                        <span className="text-[16px] font-bold text-ink tnum">${p.amount.toLocaleString()}</span>
+                      </Card>
+                    </StaggerItem>
+                  );
+                })}
+              </Stagger>
 
-          {/* Actions */}
-          <div className="mt-6 space-y-3">
-            <Button
-              variant="secondary"
-              full
-              icon={<Download className="h-[18px] w-[18px]" />}
-            >
-              {c.export}
-            </Button>
-            <Button
-              variant="ghost"
-              full
-              icon={<Sparkles className="h-[18px] w-[18px] text-violet" />}
-              iconRight={
-                <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-violet-tint px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet">
-                  {c.premiumHint}
-                </span>
-              }
-            >
-              {c.reportBureau}
-            </Button>
-          </div>
+              <div className="mt-5">
+                <Button variant="secondary" full>
+                  {c.export}
+                </Button>
+              </div>
+            </>
+          )}
         </Screen>
       </PageFade>
     </>

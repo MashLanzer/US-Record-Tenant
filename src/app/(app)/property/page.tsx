@@ -1,105 +1,178 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   Home,
   MapPin,
   ShieldCheck,
-  FileText,
   Flag,
-  ChevronRight,
   CircleDollarSign,
   CalendarRange,
-  Landmark,
   BadgeCheck,
+  CreditCard,
+  Plus,
+  Check,
+  Clock,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
-import { Card, Button, Chip, Avatar } from "@/components/ui/primitives";
-import { PageFade, Stagger, StaggerItem } from "@/components/motion";
-import { useT } from "@/lib/i18n";
+import { Card, Button, Chip, Field, Input, SegmentedControl, Skeleton } from "@/components/ui/primitives";
+import { PageFade } from "@/components/motion";
+import { useT, useLocale } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
-import { properties, landlordMe } from "@/lib/mock";
+import { useAuth } from "@/lib/auth";
+import {
+  fetchRentalById,
+  fetchPayments,
+  createPayment,
+  formatMonthYear,
+  type Rental,
+  type PaymentItem,
+} from "@/lib/data";
 
 const copy = {
   en: {
     map: "Map",
-    verifiedLandlord: "Verified landlord",
+    youManage: "You manage this property",
+    youRent: "You rent this property",
+    verified: "Verified",
+    unverified: "Unverified",
     contract: "Contract",
     rent: "Rent",
     perMonth: "/mo",
     leaseTerm: "Lease term",
-    termValue: "12 months · renews Jan 2025",
-    deposit: "Deposit",
     status: "Status",
     active: "Active",
-    documents: "Documents",
-    lease: "Lease agreement.pdf",
-    leaseMeta: "Signed · 8 pages",
-    inspection: "Move-in inspection.pdf",
-    inspectionMeta: "Signed · 3 pages",
-    viewLease: "View lease",
+    past: "Past",
+    payments: "Payments",
+    onTimeRate: "on-time",
+    noPayments: "No payments recorded yet.",
+    record: "Record payment",
+    onTime: "On time",
+    late: "Late",
+    amount: "Amount (USD)",
+    dueDate: "Due date",
+    save: "Save payment",
+    saving: "Saving…",
+    cancel: "Cancel",
     report: "Report a fact",
+    notFound: "Rental not found.",
   },
   es: {
     map: "Mapa",
-    verifiedLandlord: "Propietario verificado",
+    youManage: "Administras esta propiedad",
+    youRent: "Rentas esta propiedad",
+    verified: "Verificado",
+    unverified: "Sin verificar",
     contract: "Contrato",
     rent: "Renta",
     perMonth: "/mes",
     leaseTerm: "Plazo del contrato",
-    termValue: "12 meses · renueva ene 2025",
-    deposit: "Depósito",
     status: "Estado",
     active: "Activo",
-    documents: "Documentos",
-    lease: "Contrato de arrendamiento.pdf",
-    leaseMeta: "Firmado · 8 páginas",
-    inspection: "Inspección de entrada.pdf",
-    inspectionMeta: "Firmado · 3 páginas",
-    viewLease: "Ver contrato",
+    past: "Pasado",
+    payments: "Pagos",
+    onTimeRate: "a tiempo",
+    noPayments: "Aún no hay pagos registrados.",
+    record: "Registrar pago",
+    onTime: "A tiempo",
+    late: "Tardío",
+    amount: "Monto (USD)",
+    dueDate: "Fecha de vencimiento",
+    save: "Guardar pago",
+    saving: "Guardando…",
+    cancel: "Cancelar",
     report: "Reportar un hecho",
+    notFound: "Alquiler no encontrado.",
   },
 };
 
 export default function PropertyScreen() {
   const c = useT(copy);
   const g = useT(common);
-  const p = properties[0];
-  const deposit = p.rent * 2;
+  const { locale } = useLocale();
+  const { user } = useAuth();
 
-  const rows = [
-    {
-      icon: <CircleDollarSign className="h-[18px] w-[18px]" />,
-      label: c.rent,
-      value: (
-        <span className="tnum">
-          ${p.rent.toLocaleString()}
-          <span className="text-ink-faint">{c.perMonth}</span>
-        </span>
-      ),
-    },
-    { icon: <CalendarRange className="h-[18px] w-[18px]" />, label: c.leaseTerm, value: c.termValue },
-    {
-      icon: <Landmark className="h-[18px] w-[18px]" />,
-      label: c.deposit,
-      value: <span className="tnum">${deposit.toLocaleString()}</span>,
-    },
-    {
-      icon: <BadgeCheck className="h-[18px] w-[18px]" />,
-      label: c.status,
-      value: <Chip tone="verify">{c.active}</Chip>,
-    },
-  ];
+  const [rental, setRental] = useState<Rental | null | undefined>(undefined);
+  const [payments, setPayments] = useState<PaymentItem[] | null>(null);
 
-  const docs = [
-    { title: c.lease, meta: c.leaseMeta },
-    { title: c.inspection, meta: c.inspectionMeta },
-  ];
+  const [showForm, setShowForm] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [payStatus, setPayStatus] = useState<"onTime" | "late">("onTime");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const id = new URLSearchParams(window.location.search).get("id") ?? "";
+    let alive = true;
+    fetchRentalById(user.id, id).then((r) => alive && setRental(r));
+    fetchPayments(id).then((p) => alive && setPayments(p));
+    return () => {
+      alive = false;
+    };
+  }, [user]);
+
+  async function handleRecord() {
+    if (!rental || saving) return;
+    setSaving(true);
+    try {
+      await createPayment(rental.id, {
+        amount: Math.round(Number(amount) || rental.rent),
+        dueDate: dueDate || new Date().toISOString().slice(0, 10),
+        paidDate: payStatus === "onTime" ? dueDate || new Date().toISOString().slice(0, 10) : null,
+        status: payStatus,
+      });
+      setShowForm(false);
+      setPayments(await fetchPayments(rental.id));
+    } catch {
+      /* demo mode or error — ignore for now */
+      setShowForm(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const onTimeRate =
+    payments && payments.length > 0
+      ? Math.round((payments.filter((p) => p.status === "onTime").length / payments.length) * 100)
+      : null;
+
+  if (rental === undefined) {
+    return (
+      <>
+        <AppHeader title="…" back />
+        <PageFade>
+          <Screen>
+            <Skeleton className="h-36 w-full rounded-2xl" />
+            <Skeleton className="mt-3 h-16 w-full rounded-2xl" />
+            <Skeleton className="mt-3 h-40 w-full rounded-2xl" />
+          </Screen>
+        </PageFade>
+      </>
+    );
+  }
+
+  if (rental === null) {
+    return (
+      <>
+        <AppHeader title="—" back />
+        <PageFade>
+          <Screen>
+            <p className="mt-10 text-center text-[15px] text-ink-faint">{c.notFound}</p>
+          </Screen>
+        </PageFade>
+      </>
+    );
+  }
+
+  const term = `${formatMonthYear(rental.startDate, locale)} – ${
+    rental.status === "past" ? formatMonthYear(rental.endDate, locale) : formatMonthYear(null, locale)
+  }`;
 
   return (
     <>
-      <AppHeader title={p.address} back />
+      <AppHeader title={rental.address} back />
       <PageFade>
         <Screen>
           {/* Hero */}
@@ -111,30 +184,32 @@ export default function PropertyScreen() {
                 </span>
               </div>
               <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">
-                <MapPin className="h-3.5 w-3.5" /> {p.city}
-              </span>
-              <span className="absolute right-3 top-3 rounded-md bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/90">
-                {c.map}
+                <MapPin className="h-3.5 w-3.5" /> {rental.city}
               </span>
             </div>
             <div className="p-4">
-              <div className="text-[16px] font-bold text-ink">{p.address}</div>
-              <div className="mt-0.5 text-[13px] text-ink-faint">{p.city}</div>
+              <div className="text-[16px] font-bold text-ink">{rental.address}</div>
+              <div className="mt-0.5 text-[13px] text-ink-faint">{rental.city}</div>
             </div>
           </Card>
 
-          {/* Verified landlord */}
+          {/* Relation */}
           <Card className="mt-3 flex items-center gap-3 p-3.5">
-            <Avatar initials={landlordMe.initials} size={44} verified />
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-                {c.verifiedLandlord}
-              </div>
-              <div className="text-[15px] font-bold text-ink">{landlordMe.name}</div>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand">
+              <BadgeCheck className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1 text-[14px] font-semibold text-ink">
+              {rental.relation === "landlord" ? c.youManage : c.youRent}
             </div>
-            <Chip tone="verify" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
-              {g.status.verified}
-            </Chip>
+            {rental.verified ? (
+              <Chip tone="verify" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
+                {c.verified}
+              </Chip>
+            ) : (
+              <Chip tone="pending" icon={<Clock className="h-3.5 w-3.5" />}>
+                {c.unverified}
+              </Chip>
+            )}
           </Card>
 
           {/* Contract data */}
@@ -142,45 +217,119 @@ export default function PropertyScreen() {
             {c.contract}
           </div>
           <Card className="divide-y divide-line p-0">
-            {rows.map((r) => (
-              <div key={r.label} className="flex items-center gap-3 px-4 py-3.5">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand">
-                  {r.icon}
-                </span>
-                <span className="text-[14px] text-ink-soft">{r.label}</span>
-                <span className="ml-auto text-[15px] font-semibold text-ink">{r.value}</span>
-              </div>
-            ))}
+            <Row icon={<CircleDollarSign className="h-[18px] w-[18px]" />} label={c.rent}>
+              <span className="tnum">
+                ${rental.rent.toLocaleString()}
+                <span className="text-ink-faint">{c.perMonth}</span>
+              </span>
+            </Row>
+            <Row icon={<CalendarRange className="h-[18px] w-[18px]" />} label={c.leaseTerm}>
+              <span className="tnum text-[14px]">{term}</span>
+            </Row>
+            <Row icon={<BadgeCheck className="h-[18px] w-[18px]" />} label={c.status}>
+              <Chip tone={rental.status === "active" ? "verify" : "neutral"}>
+                {rental.status === "active" ? c.active : c.past}
+              </Chip>
+            </Row>
           </Card>
 
-          {/* Documents */}
-          <div className="mb-2.5 mt-6 text-[13px] font-bold uppercase tracking-wider text-ink-faint">
-            {c.documents}
+          {/* Payments */}
+          <div className="mb-2.5 mt-6 flex items-baseline justify-between">
+            <span className="text-[13px] font-bold uppercase tracking-wider text-ink-faint">{c.payments}</span>
+            {onTimeRate !== null && (
+              <span className="text-[13px] font-bold text-verify tnum">
+                {onTimeRate}% {c.onTimeRate}
+              </span>
+            )}
           </div>
+
           <Card className="p-0">
-            <Stagger className="divide-y divide-line">
-              {docs.map((d) => (
-                <StaggerItem key={d.title}>
-                  <Link href="/documents" className="flex items-center gap-3 px-4 py-3.5">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand">
-                      <FileText className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[15px] font-semibold text-ink">{d.title}</div>
-                      <div className="truncate text-[13px] text-ink-faint">{d.meta}</div>
+            {payments === null ? (
+              <div className="space-y-2 p-3">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : payments.length === 0 ? (
+              <p className="px-4 py-5 text-center text-[13px] text-ink-faint">{c.noPayments}</p>
+            ) : (
+              <div className="divide-y divide-line">
+                {payments.map((p) => {
+                  const label =
+                    p.dueDate ? formatMonthYear(p.dueDate, locale) : locale === "es" ? p.monthEs : p.monthEn;
+                  return (
+                    <div key={p.id} className="flex items-center gap-3 px-4 py-3">
+                      <span
+                        className={
+                          "grid h-9 w-9 shrink-0 place-items-center rounded-xl " +
+                          (p.status === "onTime" ? "bg-verify-tint text-verify" : "bg-amber-tint text-amber")
+                        }
+                      >
+                        <CreditCard className="h-[18px] w-[18px]" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[14px] font-semibold text-ink">{label}</div>
+                        <div className="text-[12px] text-ink-faint">
+                          {p.status === "onTime" ? c.onTime : c.late}
+                        </div>
+                      </div>
+                      <span className="text-[15px] font-bold text-ink tnum">${p.amount.toLocaleString()}</span>
                     </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-ink-ghost" />
-                  </Link>
-                </StaggerItem>
-              ))}
-            </Stagger>
+                  );
+                })}
+              </div>
+            )}
           </Card>
 
-          {/* Actions */}
-          <div className="mt-6 space-y-3">
-            <Button href="/documents" full icon={<FileText className="h-[18px] w-[18px]" />}>
-              {c.viewLease}
+          {/* Record payment form */}
+          {showForm ? (
+            <Card className="mt-3 space-y-3 p-4">
+              <Field label={c.amount}>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder={String(rental.rent)}
+                />
+              </Field>
+              <Field label={c.dueDate}>
+                <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              </Field>
+              <SegmentedControl
+                options={[
+                  { value: "onTime", label: c.onTime },
+                  { value: "late", label: c.late },
+                ]}
+                value={payStatus}
+                onChange={setPayStatus}
+                className="w-full"
+              />
+              <div className="flex gap-2">
+                <Button variant="secondary" full onClick={() => setShowForm(false)}>
+                  {c.cancel}
+                </Button>
+                <Button full disabled={saving} onClick={handleRecord} icon={<Check className="h-[18px] w-[18px]" />}>
+                  {saving ? c.saving : c.save}
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <Button
+              variant="ghost"
+              full
+              className="mt-3"
+              onClick={() => {
+                setAmount(String(rental.rent));
+                setShowForm(true);
+              }}
+              icon={<Plus className="h-[18px] w-[18px]" />}
+            >
+              {c.record}
             </Button>
+          )}
+
+          {/* Report */}
+          <div className="mt-6">
             <Button href="/report" variant="ghost" full icon={<Flag className="h-[18px] w-[18px]" />}>
               {c.report}
             </Button>
@@ -188,5 +337,15 @@ export default function PropertyScreen() {
         </Screen>
       </PageFade>
     </>
+  );
+}
+
+function Row({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3.5">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand">{icon}</span>
+      <span className="text-[14px] text-ink-soft">{label}</span>
+      <span className="ml-auto text-[15px] font-semibold text-ink">{children}</span>
+    </div>
   );
 }
