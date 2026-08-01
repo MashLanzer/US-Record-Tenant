@@ -13,6 +13,8 @@ import {
   Plus,
   Check,
   Clock,
+  UserPlus,
+  Mail,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
@@ -26,8 +28,11 @@ import {
   fetchPayments,
   createPayment,
   formatMonthYear,
+  inviteToLease,
+  fetchLeaseInvites,
   type Rental,
   type PaymentItem,
+  type Invitation,
 } from "@/lib/data";
 
 const copy = {
@@ -57,6 +62,17 @@ const copy = {
     cancel: "Cancel",
     report: "Report a fact",
     notFound: "Rental not found.",
+    inviteTitle: "Invite the tenant",
+    inviteSub: "Send an invite by email. When they accept, this lease becomes verified for both of you.",
+    invitePh: "tenant@email.com",
+    invite: "Send invite",
+    inviting: "Sending…",
+    invited: "Invited",
+    accepted: "Accepted",
+    declined: "Declined",
+    inviteSent: "Invite sent.",
+    inviteErr: "Could not send. Check the email and try again.",
+    tenantLinked: "Tenant confirmed · lease verified",
   },
   es: {
     map: "Mapa",
@@ -84,6 +100,17 @@ const copy = {
     cancel: "Cancelar",
     report: "Reportar un hecho",
     notFound: "Alquiler no encontrado.",
+    inviteTitle: "Invita al inquilino",
+    inviteSub: "Envía una invitación por correo. Cuando la acepte, el contrato queda verificado para ambos.",
+    invitePh: "inquilino@correo.com",
+    invite: "Enviar invitación",
+    inviting: "Enviando…",
+    invited: "Invitado",
+    accepted: "Aceptada",
+    declined: "Rechazada",
+    inviteSent: "Invitación enviada.",
+    inviteErr: "No se pudo enviar. Revisa el correo e inténtalo de nuevo.",
+    tenantLinked: "Inquilino confirmado · contrato verificado",
   },
 };
 
@@ -102,6 +129,11 @@ export default function PropertyScreen() {
   const [payStatus, setPayStatus] = useState<"onTime" | "late">("onTime");
   const [saving, setSaving] = useState(false);
 
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
+  const [invites, setInvites] = useState<Invitation[]>([]);
+
   useEffect(() => {
     if (!user) return;
     const id = new URLSearchParams(window.location.search).get("id") ?? "";
@@ -112,6 +144,29 @@ export default function PropertyScreen() {
       alive = false;
     };
   }, [user]);
+
+  // Load sent invites once we know this is the landlord's un-linked lease.
+  useEffect(() => {
+    if (rental && rental.relation === "landlord" && !rental.tenantId) {
+      fetchLeaseInvites(rental.id).then(setInvites);
+    }
+  }, [rental]);
+
+  async function handleInvite() {
+    if (!rental || !user || inviting || !inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteMsg(null);
+    try {
+      await inviteToLease(user.id, rental.id, inviteEmail);
+      setInviteEmail("");
+      setInviteMsg(c.inviteSent);
+      setInvites(await fetchLeaseInvites(rental.id));
+    } catch {
+      setInviteMsg(c.inviteErr);
+    } finally {
+      setInviting(false);
+    }
+  }
 
   async function handleRecord() {
     if (!rental || saving) return;
@@ -211,6 +266,55 @@ export default function PropertyScreen() {
               </Chip>
             )}
           </Card>
+
+          {/* Invite tenant (landlord, lease not yet linked to a tenant) */}
+          {rental.relation === "landlord" &&
+            (rental.tenantId ? (
+              <div className="mt-3 flex items-center gap-2 rounded-xl bg-verify-tint px-3.5 py-2.5 text-[13px] font-semibold text-verify">
+                <Check className="h-4 w-4 shrink-0" strokeWidth={3} />
+                {c.tenantLinked}
+              </div>
+            ) : (
+              <Card className="mt-3 p-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand">
+                    <UserPlus className="h-[18px] w-[18px]" />
+                  </span>
+                  <div className="text-[15px] font-bold text-ink">{c.inviteTitle}</div>
+                </div>
+                <p className="mt-2 text-[12.5px] leading-snug text-ink-soft">{c.inviteSub}</p>
+
+                <div className="mt-3 flex gap-2">
+                  <Input
+                    type="email"
+                    inputMode="email"
+                    placeholder={c.invitePh}
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                  />
+                  <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
+                    {inviting ? c.inviting : c.invite}
+                  </Button>
+                </div>
+                {inviteMsg && <p className="mt-2 text-[12.5px] font-medium text-ink-soft">{inviteMsg}</p>}
+
+                {invites.length > 0 && (
+                  <div className="mt-3 space-y-1.5 border-t border-line pt-3">
+                    {invites.map((inv) => (
+                      <div key={inv.id} className="flex items-center gap-2 text-[13px]">
+                        <Mail className="h-4 w-4 shrink-0 text-ink-faint" />
+                        <span className="min-w-0 flex-1 truncate text-ink-soft">{inv.inviteeEmail}</span>
+                        <Chip
+                          tone={inv.status === "accepted" ? "verify" : inv.status === "declined" ? "dispute" : "pending"}
+                        >
+                          {inv.status === "accepted" ? c.accepted : inv.status === "declined" ? c.declined : c.invited}
+                        </Chip>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            ))}
 
           {/* Contract data */}
           <div className="mb-2.5 mt-6 text-[13px] font-bold uppercase tracking-wider text-ink-faint">

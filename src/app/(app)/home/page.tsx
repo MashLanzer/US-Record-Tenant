@@ -10,6 +10,8 @@ import {
   Sparkles,
   CreditCard,
   MessageSquare,
+  UserPlus,
+  Check,
 } from "lucide-react";
 import { Screen } from "@/components/app-shell";
 import { SectionTitle } from "@/components/app-header";
@@ -24,8 +26,12 @@ import {
   fetchNotifications,
   describeNotification,
   trustLabel,
+  fetchIncomingInvitations,
+  acceptInvitation,
+  declineInvitation,
   type StatsData,
   type NotificationItem,
+  type Invitation,
 } from "@/lib/data";
 import { displayName, displayInitials } from "@/lib/identity";
 
@@ -38,6 +44,10 @@ const copy = {
     activity: "Recent activity",
     addContract: "Add contract",
     noActivity: "No activity yet. Add a contract to get started.",
+    inviteTitle: "You've been invited",
+    inviteBy: "invites you to a rental",
+    accept: "Accept",
+    decline: "Decline",
   },
   es: {
     greeting: "Bienvenido",
@@ -47,6 +57,10 @@ const copy = {
     activity: "Actividad reciente",
     addContract: "Añadir contrato",
     noActivity: "Aún no hay actividad. Añade un contrato para empezar.",
+    inviteTitle: "Te invitaron",
+    inviteBy: "te invita a un alquiler",
+    accept: "Aceptar",
+    decline: "Rechazar",
   },
 };
 
@@ -71,16 +85,34 @@ export default function HomeScreen() {
 
   const [stats, setStats] = useState<StatsData | null>(null);
   const [notifs, setNotifs] = useState<NotificationItem[] | null>(null);
+  const [invites, setInvites] = useState<Invitation[]>([]);
+  const [busyInvite, setBusyInvite] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     let alive = true;
     fetchStats(user.id, locale).then((s) => alive && setStats(s));
     fetchNotifications(user.id).then((n) => alive && setNotifs(n));
+    fetchIncomingInvitations(user.email ?? "").then((i) => alive && setInvites(i));
     return () => {
       alive = false;
     };
   }, [user, locale]);
+
+  async function respondInvite(inv: Invitation, accept: boolean) {
+    if (busyInvite) return;
+    setBusyInvite(inv.id);
+    try {
+      if (accept) await acceptInvitation(inv.id);
+      else await declineInvitation(inv.id);
+      setInvites((prev) => prev.filter((x) => x.id !== inv.id));
+      if (user && accept) fetchStats(user.id, locale).then(setStats);
+    } catch {
+      /* ignore */
+    } finally {
+      setBusyInvite(null);
+    }
+  }
 
   const name = displayName(profile, user?.email, locale);
   const initials = displayInitials(profile, user?.email);
@@ -114,6 +146,43 @@ export default function HomeScreen() {
             </Link>
           </div>
         </div>
+
+        {/* Incoming invitations */}
+        {invites.map((inv) => (
+          <Card key={inv.id} className="mt-4 border-brand/30 bg-brand-tint p-4">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand text-white">
+                <UserPlus className="h-[18px] w-[18px]" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-bold text-ink">{c.inviteTitle}</div>
+                <div className="truncate text-[12.5px] text-ink-soft">
+                  {inv.inviterName} {c.inviteBy} · {inv.address}
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Button
+                full
+                size="sm"
+                disabled={busyInvite === inv.id}
+                onClick={() => respondInvite(inv, true)}
+                icon={<Check className="h-4 w-4" />}
+              >
+                {c.accept}
+              </Button>
+              <Button
+                full
+                size="sm"
+                variant="secondary"
+                disabled={busyInvite === inv.id}
+                onClick={() => respondInvite(inv, false)}
+              >
+                {c.decline}
+              </Button>
+            </div>
+          </Card>
+        ))}
 
         {/* Trust score hero card */}
         <Link href="/reputation" className="mt-4 block">

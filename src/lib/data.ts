@@ -29,6 +29,7 @@ export type Rental = {
   endDate: string | null;
   verified: boolean;
   relation: "landlord" | "tenant";
+  tenantId: string | null;
 };
 
 export type NewRentalInput = {
@@ -54,13 +55,14 @@ export async function fetchMyRentals(userId: string): Promise<Rental[]> {
       startDate: p.startDate,
       endDate: p.endDate ?? null,
       verified: p.verified,
-      relation: "tenant",
+      relation: "tenant" as const,
+      tenantId: "demo",
     }));
   }
 
   const { data, error } = await sb
     .from("leases")
-    .select("id, start_date, end_date, status, verified, landlord_id, property:properties(address, city, rent)")
+    .select("id, start_date, end_date, status, verified, landlord_id, tenant_id, property:properties(address, city, rent)")
     .or(`landlord_id.eq.${userId},tenant_id.eq.${userId}`)
     .order("created_at", { ascending: false });
 
@@ -78,6 +80,7 @@ export async function fetchMyRentals(userId: string): Promise<Rental[]> {
       endDate: (l.end_date as string) ?? null,
       verified: Boolean(l.verified),
       relation: l.landlord_id === userId ? "landlord" : "tenant",
+      tenantId: (l.tenant_id as string) ?? null,
     };
   });
 }
@@ -128,13 +131,14 @@ export async function fetchRentalById(userId: string, leaseId: string): Promise<
           startDate: p.startDate,
           endDate: p.endDate ?? null,
           verified: p.verified,
-          relation: "tenant",
+          relation: "tenant" as const,
+          tenantId: "demo",
         }
       : null;
   }
   const { data, error } = await sb
     .from("leases")
-    .select("id, start_date, end_date, status, verified, landlord_id, property:properties(address, city, rent)")
+    .select("id, start_date, end_date, status, verified, landlord_id, tenant_id, property:properties(address, city, rent)")
     .eq("id", leaseId)
     .single();
   if (error || !data) return null;
@@ -150,6 +154,7 @@ export async function fetchRentalById(userId: string, leaseId: string): Promise<
     endDate: (l.end_date as string) ?? null,
     verified: Boolean(l.verified),
     relation: l.landlord_id === userId ? "landlord" : "tenant",
+    tenantId: (l.tenant_id as string) ?? null,
   };
 }
 
@@ -468,6 +473,12 @@ export function describeNotification(
         desc: es ? "Tu badge de confianza está activo." : "Your trust badge is now active.",
         tone: "verify",
       };
+    case "invitation_accepted":
+      return {
+        title: es ? "Inquilino confirmó el contrato" : "Tenant confirmed the lease",
+        desc: (d.email as string) ?? "",
+        tone: "verify",
+      };
     case "evidence_added":
     case "document_added":
       return {
@@ -664,6 +675,95 @@ export async function updateIdentityVerified(userId: string): Promise<void> {
   const db = typed as unknown as SupabaseClient;
   await db.from("profiles").update({ identity_verified: true }).eq("id", userId);
   await notify(userId, "identity_verified", {});
+}
+
+/* ------------------------------------------------ lease invitations (bilateral) */
+export type Invitation = {
+  id: string;
+  leaseId: string;
+  address: string;
+  city: string;
+  inviterName: string;
+  inviteeEmail: string;
+  status: "pending" | "accepted" | "declined";
+};
+
+/** Landlord invites a tenant (by email) to a lease they own. */
+export async function inviteToLease(userId: string, leaseId: string, email: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.from("invitations").insert({
+    lease_id: leaseId,
+    inviter_id: userId,
+    invitee_email: email.trim().toLowerCase(),
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Invitations the landlord has sent for a given lease. */
+export async function fetchLeaseInvites(leaseId: string): Promise<Invitation[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data } = await sb
+    .from("invitations")
+    .select("id, invitee_email, status, lease_id")
+    .eq("lease_id", leaseId)
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((v: Record<string, unknown>) => ({
+    id: v.id as string,
+    leaseId: v.lease_id as string,
+    address: "",
+    city: "",
+    inviterName: "",
+    inviteeEmail: v.invitee_email as string,
+    status: (v.status as Invitation["status"]) ?? "pending",
+  }));
+}
+
+/** Pending invitations addressed to the current user's email. */
+export async function fetchIncomingInvitations(email: string): Promise<Invitation[]> {
+  const sb = getSupabase();
+  if (!sb || !email) return [];
+  const { data, error } = await sb
+    .from("invitations")
+    .select(
+      "id, invitee_email, status, lease:leases(id, property:properties(address, city)), inviter:profiles!invitations_inviter_id_fkey(full_name)",
+    )
+    .eq("invitee_email", email.toLowerCase())
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((v: Record<string, unknown>) => {
+    const lease = (v.lease ?? {}) as { id?: string; property?: { address?: string; city?: string } };
+    const prop = lease.property ?? {};
+    const inviter = (v.inviter ?? {}) as { full_name?: string };
+    return {
+      id: v.id as string,
+      leaseId: lease.id ?? "",
+      address: prop.address ?? "—",
+      city: prop.city ?? "",
+      inviterName: inviter.full_name || "A landlord",
+      inviteeEmail: v.invitee_email as string,
+      status: "pending" as const,
+    };
+  });
+}
+
+export async function acceptInvitation(invId: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) return;
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("accept_invitation", { inv_id: invId });
+  if (error) throw new Error(error.message);
+}
+
+export async function declineInvitation(invId: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) return;
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("decline_invitation", { inv_id: invId });
+  if (error) throw new Error(error.message);
 }
 
 /* --------------------------------------------------- trust score (computed) */
