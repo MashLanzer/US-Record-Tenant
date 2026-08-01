@@ -12,6 +12,7 @@ import {
   LogOut,
   Share2,
   Check,
+  Pencil,
 } from "lucide-react";
 import { Screen } from "@/components/app-shell";
 import { SectionTitle } from "@/components/app-header";
@@ -45,6 +46,8 @@ const copy = {
     helpSub: "Answers and contact",
     settings: "Settings",
     settingsSub: "Privacy, language, theme",
+    editProfile: "Edit profile",
+    editProfileSub: "Name, phone, about you",
     share: "Share profile",
     logout: "Log out",
   },
@@ -67,6 +70,8 @@ const copy = {
     helpSub: "Respuestas y contacto",
     settings: "Ajustes",
     settingsSub: "Privacidad, idioma, tema",
+    editProfile: "Editar perfil",
+    editProfileSub: "Nombre, teléfono, sobre ti",
     share: "Compartir perfil",
     logout: "Cerrar sesión",
   },
@@ -97,6 +102,7 @@ export default function ProfileScreen() {
   });
 
   const menu = [
+    { icon: <Pencil className="h-5 w-5" />, title: c.editProfile, subtitle: c.editProfileSub, href: "/profile/edit", tone: "brand" as const },
     { icon: <ShieldCheck className="h-5 w-5" />, title: c.reputation, subtitle: c.reputationSub, href: "/reputation", tone: "brand" as const },
     { icon: <FileText className="h-5 w-5" />, title: docCopy.title, subtitle: docCopy.sub, href: "/documents", tone: "verify" as const },
     { icon: <BadgeCheck className="h-5 w-5" />, title: c.verification, subtitle: c.verificationSub, href: "/verification-status", tone: "verify" as const },

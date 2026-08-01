@@ -82,6 +82,8 @@ const DEMO_PROFILE: Profile = {
   role: "tenant",
   full_name: me.name,
   avatar_initials: me.initials,
+  phone: null,
+  bio: null,
   trust_score: me.trustScore,
   identity_verified: true,
   created_at: new Date(0).toISOString(),

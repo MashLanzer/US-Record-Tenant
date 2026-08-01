@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   User,
   Mail,
@@ -24,6 +23,7 @@ import { PageFade } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { displayName } from "@/lib/identity";
+import { usePref } from "@/lib/prefs";
 
 const copy = {
   en: {
@@ -32,7 +32,8 @@ const copy = {
     name: "Name",
     email: "Email",
     security: "Security",
-    faceId: "Face ID",
+    faceId: "Biometric unlock",
+    faceIdSub: "Use Face ID / fingerprint on this device",
     changePassword: "Change password",
     privacy: "Privacy",
     consent: "Consent & data",
@@ -54,7 +55,8 @@ const copy = {
     name: "Nombre",
     email: "Correo",
     security: "Seguridad",
-    faceId: "Face ID",
+    faceId: "Desbloqueo biométrico",
+    faceIdSub: "Usa Face ID / huella en este dispositivo",
     changePassword: "Cambiar contraseña",
     privacy: "Privacidad",
     consent: "Consentimiento y datos",
@@ -78,8 +80,8 @@ export default function SettingsScreen() {
   const c = useT(copy);
   const { locale } = useLocale();
   const { signOut, profile, user } = useAuth();
-  const [faceId, setFaceId] = useState(true);
-  const [notify, setNotify] = useState(true);
+  const [faceId, setFaceId] = usePref("biometric", false);
+  const [notify, setNotify] = usePref("notifications", true);
   const name = displayName(profile, user?.email, locale);
 
   return (
@@ -90,8 +92,8 @@ export default function SettingsScreen() {
           {/* Account */}
           <SectionTitle>{c.account}</SectionTitle>
           <Card className="divide-y divide-line px-3.5">
-            <ListRow icon={<User className="h-5 w-5" />} title={c.name} subtitle={name} right={chevron} onClick={() => {}} />
-            <ListRow icon={<Mail className="h-5 w-5" />} title={c.email} subtitle={user?.email ?? "—"} right={chevron} onClick={() => {}} />
+            <ListRow icon={<User className="h-5 w-5" />} title={c.name} subtitle={name} right={chevron} href="/profile/edit" />
+            <ListRow icon={<Mail className="h-5 w-5" />} title={c.email} subtitle={user?.email ?? "—"} right={chevron} href="/profile/edit" />
           </Card>
 
           {/* Security */}
@@ -100,10 +102,11 @@ export default function SettingsScreen() {
             <ListRow
               icon={<ScanFace className="h-5 w-5" />}
               title={c.faceId}
+              subtitle={c.faceIdSub}
               tone="verify"
               right={<Toggle checked={faceId} onChange={setFaceId} />}
             />
-            <ListRow icon={<Lock className="h-5 w-5" />} title={c.changePassword} right={chevron} onClick={() => {}} />
+            <ListRow icon={<Lock className="h-5 w-5" />} title={c.changePassword} right={chevron} href="/settings/password" />
           </Card>
 
           {/* Privacy */}
@@ -129,7 +132,7 @@ export default function SettingsScreen() {
               tone="amber"
               right={<Toggle checked={notify} onChange={setNotify} />}
             />
-            <ListRow icon={<Info className="h-5 w-5" />} title={c.about} tone="neutral" right={chevron} onClick={() => {}} />
+            <ListRow icon={<Info className="h-5 w-5" />} title={c.about} tone="neutral" right={chevron} href="/about" />
             <ListRow icon={<CircleHelp className="h-5 w-5" />} title={c.help} tone="neutral" right={chevron} href="/help" />
           </Card>
 

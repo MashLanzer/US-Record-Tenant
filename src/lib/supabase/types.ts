@@ -10,6 +10,8 @@ export interface Profile {
   role: Role;
   full_name: string | null;
   avatar_initials: string | null;
+  phone: string | null;
+  bio: string | null;
   trust_score: number;
   identity_verified: boolean;
   created_at: string;

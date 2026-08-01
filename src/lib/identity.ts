@@ -16,5 +16,13 @@ export function displayName(
 export function displayInitials(profile: Profile | null, email: string | null | undefined): string {
   if (profile?.avatar_initials) return profile.avatar_initials;
   const base = profile?.full_name || (email ? email.split("@")[0] : "");
-  return base ? base.slice(0, 2).toUpperCase() : "?";
+  return initialsFrom(base);
+}
+
+/** Two-letter initials from a free-text name (first + last word, else first two chars). */
+export function initialsFrom(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }

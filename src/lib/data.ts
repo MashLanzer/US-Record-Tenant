@@ -1239,3 +1239,36 @@ export async function fetchAccessLog(userId: string, locale: Locale): Promise<Ac
     };
   });
 }
+
+/* --------------------------------------------------------------- profile edit */
+export type ProfileUpdate = {
+  full_name: string;
+  phone: string;
+  bio: string;
+  avatar_initials: string;
+};
+
+/** Update the signed-in user's own profile (RLS: profiles_update_own). */
+export async function updateProfile(userId: string, patch: ProfileUpdate): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db
+    .from("profiles")
+    .update({
+      full_name: patch.full_name.trim() || null,
+      phone: patch.phone.trim() || null,
+      bio: patch.bio.trim() || null,
+      avatar_initials: patch.avatar_initials.trim().slice(0, 2).toUpperCase() || null,
+    })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+}
+
+/** Change the signed-in user's password (requires a live session). */
+export async function updatePassword(newPassword: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("demo-mode");
+  const { error } = await sb.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+}
