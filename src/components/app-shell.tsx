@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { ThemeToggle, LangToggle } from "@/components/toggles";
+import { OfflineBanner } from "@/components/offline-banner";
 
 type NavKey = "home" | "search" | "records" | "messages" | "profile";
 const NAV: { key: NavKey; href: string; icon: LucideIcon }[] = [
@@ -65,6 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main content */}
       <main className="min-w-0 flex-1">
+        <OfflineBanner />
         <div className="mx-auto w-full max-w-[640px] pb-28 lg:pb-12">{children}</div>
       </main>
 

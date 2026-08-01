@@ -21,6 +21,7 @@ import {
 
 export type Rental = {
   id: string;
+  propertyId: string | null;
   address: string;
   city: string;
   rent: number;
@@ -48,6 +49,7 @@ export async function fetchMyRentals(userId: string): Promise<Rental[]> {
     // demo mode → adapt the mock properties into the Rental shape
     return mockProperties.map((p) => ({
       id: p.id,
+      propertyId: p.id,
       address: p.address,
       city: p.city,
       rent: p.rent,
@@ -62,7 +64,7 @@ export async function fetchMyRentals(userId: string): Promise<Rental[]> {
 
   const { data, error } = await sb
     .from("leases")
-    .select("id, start_date, end_date, status, verified, landlord_id, tenant_id, property:properties(address, city, rent)")
+    .select("id, property_id, start_date, end_date, status, verified, landlord_id, tenant_id, property:properties(address, city, rent)")
     .or(`landlord_id.eq.${userId},tenant_id.eq.${userId}`)
     .order("created_at", { ascending: false });
 
@@ -72,6 +74,7 @@ export async function fetchMyRentals(userId: string): Promise<Rental[]> {
     const prop = (l.property ?? {}) as { address?: string; city?: string; rent?: number };
     return {
       id: l.id as string,
+      propertyId: (l.property_id as string) ?? null,
       address: prop.address ?? "—",
       city: prop.city ?? "",
       rent: prop.rent ?? 0,
@@ -116,6 +119,60 @@ export async function createRental(userId: string, input: NewRentalInput): Promi
   return lease.id as string;
 }
 
+export type RentalUpdate = {
+  leaseId: string;
+  propertyId: string | null;
+  address: string;
+  city: string;
+  rent: number;
+  startDate: string;
+  endDate: string | null;
+  status: "active" | "past";
+};
+
+/** Edit a contract: updates the lease and its property (landlord only, RLS). */
+export async function updateRental(input: RentalUpdate): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+
+  if (input.propertyId) {
+    const { error: e1 } = await db
+      .from("properties")
+      .update({ address: input.address, city: input.city, rent: input.rent })
+      .eq("id", input.propertyId);
+    if (e1) throw new Error(e1.message);
+  }
+
+  const { error: e2 } = await db
+    .from("leases")
+    .update({
+      start_date: input.startDate,
+      end_date: input.status === "past" ? input.endDate : null,
+      status: input.status,
+    })
+    .eq("id", input.leaseId);
+  if (e2) throw new Error(e2.message);
+}
+
+/**
+ * Delete a contract. Deleting the property cascades to its lease, payments,
+ * reports, ratings and disputes. Falls back to deleting just the lease if the
+ * property id isn't known.
+ */
+export async function deleteRental(leaseId: string, propertyId: string | null): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  if (propertyId) {
+    const { error } = await db.from("properties").delete().eq("id", propertyId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await db.from("leases").delete().eq("id", leaseId);
+    if (error) throw new Error(error.message);
+  }
+}
+
 /** A single rental (lease) by id — for the property detail screen. */
 export async function fetchRentalById(userId: string, leaseId: string): Promise<Rental | null> {
   const sb = getSupabase();
@@ -124,6 +181,7 @@ export async function fetchRentalById(userId: string, leaseId: string): Promise<
     return p
       ? {
           id: p.id,
+          propertyId: p.id,
           address: p.address,
           city: p.city,
           rent: p.rent,
@@ -138,7 +196,7 @@ export async function fetchRentalById(userId: string, leaseId: string): Promise<
   }
   const { data, error } = await sb
     .from("leases")
-    .select("id, start_date, end_date, status, verified, landlord_id, tenant_id, property:properties(address, city, rent)")
+    .select("id, property_id, start_date, end_date, status, verified, landlord_id, tenant_id, property:properties(address, city, rent)")
     .eq("id", leaseId)
     .single();
   if (error || !data) return null;
@@ -146,6 +204,7 @@ export async function fetchRentalById(userId: string, leaseId: string): Promise<
   const prop = (l.property ?? {}) as { address?: string; city?: string; rent?: number };
   return {
     id: l.id as string,
+    propertyId: (l.property_id as string) ?? null,
     address: prop.address ?? "—",
     city: prop.city ?? "",
     rent: prop.rent ?? 0,
@@ -239,6 +298,35 @@ export async function createPayment(
 
   const { data: u } = await typed.auth.getUser();
   if (u.user) await notify(u.user.id, "payment_recorded", { amount: input.amount });
+}
+
+/** Edit an existing payment (either lease party, RLS-enforced). */
+export async function updatePayment(
+  paymentId: string,
+  input: { amount: number; dueDate: string; paidDate: string | null; status: "onTime" | "late" },
+): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db
+    .from("payments")
+    .update({
+      amount: input.amount,
+      due_date: input.dueDate,
+      paid_date: input.paidDate,
+      status: input.status,
+    })
+    .eq("id", paymentId);
+  if (error) throw new Error(error.message);
+}
+
+/** Delete a payment (either lease party, RLS-enforced). */
+export async function deletePayment(paymentId: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.from("payments").delete().eq("id", paymentId);
+  if (error) throw new Error(error.message);
 }
 
 export type SearchItem = {
@@ -754,6 +842,15 @@ export async function submitReport(
     p_description: description,
     p_evidence_path: evidencePath,
   });
+  if (error) throw new Error(error.message);
+}
+
+/** Retract a fact you recorded (author only, RLS-enforced). */
+export async function deleteReport(reportId: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.from("reports").delete().eq("id", reportId);
   if (error) throw new Error(error.message);
 }
 

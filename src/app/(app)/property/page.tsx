@@ -16,6 +16,9 @@ import {
   UserPlus,
   Mail,
   Star,
+  Pencil,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
@@ -28,6 +31,9 @@ import {
   fetchRentalById,
   fetchPayments,
   createPayment,
+  updatePayment,
+  deletePayment,
+  deleteReport,
   formatMonthYear,
   inviteToLease,
   fetchLeaseInvites,
@@ -67,6 +73,12 @@ const copy = {
     save: "Save payment",
     saving: "Saving…",
     cancel: "Cancel",
+    editContract: "Edit contract",
+    editPayment: "Edit payment",
+    delete: "Delete",
+    deletePaymentQ: "Delete this payment?",
+    retractFactQ: "Retract this fact?",
+    retract: "Retract",
     report: "Report a fact",
     notFound: "Rental not found.",
     inviteTitle: "Invite the tenant",
@@ -125,6 +137,12 @@ const copy = {
     save: "Guardar pago",
     saving: "Guardando…",
     cancel: "Cancelar",
+    editContract: "Editar contrato",
+    editPayment: "Editar pago",
+    delete: "Eliminar",
+    deletePaymentQ: "¿Eliminar este pago?",
+    retractFactQ: "¿Retirar este hecho?",
+    retract: "Retirar",
     report: "Reportar un hecho",
     notFound: "Alquiler no encontrado.",
     inviteTitle: "Invita al inquilino",
@@ -171,10 +189,14 @@ export default function PropertyScreen() {
   const [payments, setPayments] = useState<PaymentItem[] | null>(null);
 
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [payStatus, setPayStatus] = useState<"onTime" | "late">("onTime");
   const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [factDelete, setFactDelete] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
@@ -269,23 +291,73 @@ export default function PropertyScreen() {
     }
   }
 
+  function openNewPayment() {
+    setEditingId(null);
+    setAmount(String(rental && rental !== null ? rental.rent : ""));
+    setDueDate("");
+    setPayStatus("onTime");
+    setShowForm(true);
+  }
+
+  function openEditPayment(p: PaymentItem) {
+    setEditingId(p.id);
+    setAmount(String(p.amount));
+    setDueDate(p.dueDate ?? "");
+    setPayStatus(p.status);
+    setPendingDelete(null);
+    setShowForm(true);
+  }
+
   async function handleRecord() {
     if (!rental || saving) return;
     setSaving(true);
+    const today = new Date().toISOString().slice(0, 10);
+    const payload = {
+      amount: Math.round(Number(amount) || rental.rent),
+      dueDate: dueDate || today,
+      paidDate: payStatus === "onTime" ? dueDate || today : null,
+      status: payStatus,
+    };
     try {
-      await createPayment(rental.id, {
-        amount: Math.round(Number(amount) || rental.rent),
-        dueDate: dueDate || new Date().toISOString().slice(0, 10),
-        paidDate: payStatus === "onTime" ? dueDate || new Date().toISOString().slice(0, 10) : null,
-        status: payStatus,
-      });
+      if (editingId) await updatePayment(editingId, payload);
+      else await createPayment(rental.id, payload);
       setShowForm(false);
+      setEditingId(null);
       setPayments(await fetchPayments(rental.id));
     } catch {
-      /* demo mode or error — ignore for now */
+      /* demo mode or error — close the form */
       setShowForm(false);
+      setEditingId(null);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeletePayment(id: string) {
+    if (!rental || busyId) return;
+    setBusyId(id);
+    try {
+      await deletePayment(id);
+      setPayments(await fetchPayments(rental.id));
+    } catch {
+      /* ignore */
+    } finally {
+      setBusyId(null);
+      setPendingDelete(null);
+    }
+  }
+
+  async function handleDeleteFact(id: string) {
+    if (!rental || !user || busyId) return;
+    setBusyId(id);
+    try {
+      await deleteReport(id);
+      setReports(await fetchReportsForLease(rental.id, user.id));
+    } catch {
+      /* ignore */
+    } finally {
+      setBusyId(null);
+      setFactDelete(null);
     }
   }
 
@@ -438,6 +510,18 @@ export default function PropertyScreen() {
             </Row>
           </Card>
 
+          {rental.relation === "landlord" && (
+            <Button
+              href={`/rentals/edit?id=${rental.id}`}
+              variant="ghost"
+              full
+              className="mt-2.5"
+              icon={<Pencil className="h-[17px] w-[17px]" />}
+            >
+              {c.editContract}
+            </Button>
+          )}
+
           {/* Payments */}
           <div className="mb-2.5 mt-6 flex items-baseline justify-between">
             <span className="text-[13px] font-bold uppercase tracking-wider text-ink-faint">{c.payments}</span>
@@ -461,23 +545,62 @@ export default function PropertyScreen() {
                 {payments.map((p) => {
                   const label =
                     p.dueDate ? formatMonthYear(p.dueDate, locale) : locale === "es" ? p.monthEs : p.monthEn;
+                  const confirming = pendingDelete === p.id;
+                  const editable = !!rental.tenantId || rental.relation === "tenant";
                   return (
-                    <div key={p.id} className="flex items-center gap-3 px-4 py-3">
-                      <span
-                        className={
-                          "grid h-9 w-9 shrink-0 place-items-center rounded-xl " +
-                          (p.status === "onTime" ? "bg-verify-tint text-verify" : "bg-amber-tint text-amber")
-                        }
-                      >
-                        <CreditCard className="h-[18px] w-[18px]" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[14px] font-semibold text-ink">{label}</div>
-                        <div className="text-[12px] text-ink-faint">
-                          {p.status === "onTime" ? c.onTime : c.late}
+                    <div key={p.id} className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={
+                            "grid h-9 w-9 shrink-0 place-items-center rounded-xl " +
+                            (p.status === "onTime" ? "bg-verify-tint text-verify" : "bg-amber-tint text-amber")
+                          }
+                        >
+                          <CreditCard className="h-[18px] w-[18px]" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[14px] font-semibold text-ink">{label}</div>
+                          <div className="text-[12px] text-ink-faint">
+                            {p.status === "onTime" ? c.onTime : c.late}
+                          </div>
                         </div>
+                        <span className="text-[15px] font-bold text-ink tnum">${p.amount.toLocaleString()}</span>
+                        {editable && !p.monthEn && (
+                          <div className="flex shrink-0 items-center gap-0.5 pl-1">
+                            <button
+                              onClick={() => openEditPayment(p)}
+                              className="grid h-8 w-8 place-items-center rounded-lg text-ink-faint hover:bg-surface-3 hover:text-ink"
+                              aria-label={c.editPayment}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setPendingDelete(confirming ? null : p.id)}
+                              className="grid h-8 w-8 place-items-center rounded-lg text-ink-faint hover:bg-danger-tint hover:text-danger"
+                              aria-label={c.delete}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <span className="text-[15px] font-bold text-ink tnum">${p.amount.toLocaleString()}</span>
+                      {confirming && (
+                        <div className="mt-2 flex items-center gap-2 rounded-xl bg-danger-tint px-3 py-2">
+                          <span className="flex-1 text-[12.5px] font-semibold text-danger">{c.deletePaymentQ}</span>
+                          <Button size="sm" variant="secondary" onClick={() => setPendingDelete(null)} disabled={busyId === p.id}>
+                            {c.cancel}
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-danger text-white hover:bg-danger"
+                            onClick={() => handleDeletePayment(p.id)}
+                            disabled={busyId === p.id}
+                            icon={busyId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : undefined}
+                          >
+                            {c.delete}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -485,9 +608,10 @@ export default function PropertyScreen() {
             )}
           </Card>
 
-          {/* Record payment form */}
+          {/* Record / edit payment form */}
           {showForm ? (
             <Card className="mt-3 space-y-3 p-4">
+              <div className="text-[14px] font-bold text-ink">{editingId ? c.editPayment : c.record}</div>
               <Field label={c.amount}>
                 <Input
                   type="number"
@@ -510,7 +634,7 @@ export default function PropertyScreen() {
                 className="w-full"
               />
               <div className="flex gap-2">
-                <Button variant="secondary" full onClick={() => setShowForm(false)}>
+                <Button variant="secondary" full onClick={() => { setShowForm(false); setEditingId(null); }}>
                   {c.cancel}
                 </Button>
                 <Button full disabled={saving} onClick={handleRecord} icon={<Check className="h-[18px] w-[18px]" />}>
@@ -523,10 +647,7 @@ export default function PropertyScreen() {
               variant="ghost"
               full
               className="mt-3"
-              onClick={() => {
-                setAmount(String(rental.rent));
-                setShowForm(true);
-              }}
+              onClick={openNewPayment}
               icon={<Plus className="h-[18px] w-[18px]" />}
             >
               {c.record}
@@ -556,7 +677,34 @@ export default function PropertyScreen() {
                     {r.description && (
                       <p className="mt-1 text-[13px] leading-snug text-ink-soft">{r.description}</p>
                     )}
-                    <div className="mt-1 text-[11px] text-ink-faint">{r.timeLabel}</div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="flex-1 text-[11px] text-ink-faint">{r.timeLabel}</span>
+                      {r.direction === "by_me" && r.status !== "disputed" && (
+                        <button
+                          onClick={() => setFactDelete(factDelete === r.id ? null : r.id)}
+                          className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-ink-faint hover:text-danger"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> {c.retract}
+                        </button>
+                      )}
+                    </div>
+                    {factDelete === r.id && (
+                      <div className="mt-2 flex items-center gap-2 rounded-xl bg-danger-tint px-3 py-2">
+                        <span className="flex-1 text-[12.5px] font-semibold text-danger">{c.retractFactQ}</span>
+                        <Button size="sm" variant="secondary" onClick={() => setFactDelete(null)} disabled={busyId === r.id}>
+                          {c.cancel}
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="bg-danger text-white hover:bg-danger"
+                          onClick={() => handleDeleteFact(r.id)}
+                          disabled={busyId === r.id}
+                          icon={busyId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : undefined}
+                        >
+                          {c.retract}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </Card>
