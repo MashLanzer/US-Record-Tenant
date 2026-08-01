@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ShieldCheck, Scale, FileText, Lock, ChevronRight, Heart, Home } from "lucide-react";
+import { ShieldCheck, Scale, FileText, Lock, ChevronRight, Heart, Home, MapPin } from "lucide-react";
 import { AppHeader, SectionTitle } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
 import { Card, ListRow } from "@/components/ui/primitives";
@@ -28,6 +28,7 @@ const copy = {
     privacy: "Privacy Policy",
     fcra: "FCRA notice",
     fairHousing: "Fair Housing policy",
+    stateRules: "State screening rules",
     version: "Version",
     madeWith: "Made with care for renters and owners alike.",
     equalHousing: "Equal Housing Opportunity. We do not tolerate discrimination based on any protected class.",
@@ -49,6 +50,7 @@ const copy = {
     privacy: "Política de privacidad",
     fcra: "Aviso FCRA",
     fairHousing: "Política de Vivienda Justa",
+    stateRules: "Reglas estatales de screening",
     version: "Versión",
     madeWith: "Hecho con cuidado para inquilinos y propietarios por igual.",
     equalHousing: "Igualdad de Oportunidad de Vivienda. No toleramos la discriminación por ninguna clase protegida.",
@@ -89,6 +91,7 @@ export default function AboutScreen() {
             <ListRow icon={<Lock className="h-5 w-5" />} title={c.privacy} right={chevron} href="/legal/privacy" />
             <ListRow icon={<Scale className="h-5 w-5" />} title={c.fcra} right={chevron} href="/legal/fcra" />
             <ListRow icon={<Home className="h-5 w-5" />} title={c.fairHousing} right={chevron} href="/legal/fair-housing" />
+            <ListRow icon={<MapPin className="h-5 w-5" />} title={c.stateRules} right={chevron} href="/legal/state-rules" />
           </Card>
 
           <div className="mt-5 flex items-center gap-2.5 rounded-2xl border border-line bg-surface-2 p-3.5">

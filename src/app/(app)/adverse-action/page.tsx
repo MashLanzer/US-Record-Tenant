@@ -46,6 +46,7 @@ const copy = {
     fhCertify: "I certify this decision is not based on race, color, national origin, religion, sex, familial status, disability, or any other protected class, and that the same criteria apply to every applicant.",
     fhLearn: "Fair Housing policy",
     fhNoteWarn: "Your note may reference a protected class. Please remove it — adverse actions must be about conduct only.",
+    stateRules: "Check your state's screening rules",
     // Notice body
     nHeading: "Notice of Adverse Action",
     nP1: "This notice is provided because an adverse action was taken, in whole or in part, based on information obtained through Tenant Trust.",
@@ -82,6 +83,7 @@ const copy = {
     fhCertify: "Certifico que esta decisión no se basa en raza, color, origen nacional, religión, sexo, estatus familiar, discapacidad ni ninguna otra clase protegida, y que se aplican los mismos criterios a cada solicitante.",
     fhLearn: "Política de Vivienda Justa",
     fhNoteWarn: "Tu nota podría referir a una clase protegida. Elimínala — las acciones adversas deben ser solo sobre conducta.",
+    stateRules: "Revisa las reglas de screening de tu estado",
     nHeading: "Aviso de Acción Adversa",
     nP1: "Este aviso se entrega porque se tomó una acción adversa, total o parcialmente, con base en información obtenida a través de Tenant Trust.",
     nP2: "Tenant Trust no tomó la decisión de esta acción y no puede dar las razones específicas. Las razones, si las hay, las indica la parte que emitió este aviso.",
@@ -189,6 +191,12 @@ export default function AdverseActionScreen() {
           <p className="mt-3 text-[12.5px] text-ink-faint">
             {c.about} <span className="font-semibold text-ink-soft">{subject.name}</span>
           </p>
+          <Link
+            href="/legal/state-rules"
+            className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-brand"
+          >
+            <Scale className="h-3.5 w-3.5" /> {c.stateRules}
+          </Link>
 
           {/* Decision */}
           <div className="mb-2 mt-5 text-[13px] font-bold uppercase tracking-wider text-ink-faint">{c.decision}</div>
