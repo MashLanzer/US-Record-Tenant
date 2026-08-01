@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
@@ -9,6 +9,7 @@ import { useT } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/lib/auth";
+import { isNativeApp } from "@/lib/platform";
 
 type Role = "tenant" | "landlord";
 
@@ -66,6 +67,9 @@ export default function RegisterScreen() {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [native, setNative] = useState(false);
+
+  useEffect(() => setNative(isNativeApp()), []);
 
   const roleOptions: { value: Role; label: string }[] = [
     { value: "tenant", label: g.roles.tenant },
@@ -130,22 +134,26 @@ export default function RegisterScreen() {
         </form>
       </div>
 
-      <div className="my-6 flex items-center gap-3">
-        <span className="h-px flex-1 bg-line" />
-        <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">{c.or}</span>
-        <span className="h-px flex-1 bg-line" />
-      </div>
+      {!native && (
+        <>
+          <div className="my-6 flex items-center gap-3">
+            <span className="h-px flex-1 bg-line" />
+            <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">{c.or}</span>
+            <span className="h-px flex-1 bg-line" />
+          </div>
 
-      <Button
-        type="button"
-        variant="secondary"
-        size="lg"
-        full
-        icon={<GoogleGlyph />}
-        onClick={() => handleOAuth("google")}
-      >
-        {c.google}
-      </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            full
+            icon={<GoogleGlyph />}
+            onClick={() => handleOAuth("google")}
+          >
+            {c.google}
+          </Button>
+        </>
+      )}
 
       <button
         type="button"
