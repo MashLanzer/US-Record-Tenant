@@ -60,6 +60,7 @@ const copy = {
     disputes: "Disputed",
     noData: "No verified history yet.",
     self: "This is your public trust profile — this is what others see.",
+    fcraNote: "Not a consumer report. Don't use it for FCRA-covered credit, housing, insurance or employment decisions.",
   },
   es: {
     title: "Perfil de confianza",
@@ -87,6 +88,7 @@ const copy = {
     disputes: "En disputa",
     noData: "Aún no hay historial verificado.",
     self: "Este es tu perfil público de confianza — esto es lo que ven los demás.",
+    fcraNote: "No es un informe del consumidor. No lo uses para decisiones de crédito, vivienda, seguros o empleo cubiertas por la FCRA.",
   },
 };
 
@@ -241,6 +243,9 @@ export default function PublicTrustScreen() {
               {report.leases === 0 && report.facts === 0 && (
                 <p className="mt-2 text-center text-[12.5px] text-ink-faint">{c.noData}</p>
               )}
+              <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-ink-faint">
+                <Lock className="mt-0.5 h-3 w-3 shrink-0" /> {c.fcraNote}
+              </p>
             </>
           ) : !isSelf ? (
             /* Gated — consent flow */

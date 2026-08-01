@@ -14,6 +14,11 @@ import {
   Info,
   CircleHelp,
   LogOut,
+  Download,
+  Trash2,
+  Scale,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { useState } from "react";
 import { AppHeader, SectionTitle } from "@/components/app-header";
@@ -27,6 +32,7 @@ import { displayName } from "@/lib/identity";
 import { usePref } from "@/lib/prefs";
 import { isBiometricAvailable } from "@/lib/biometric";
 import { isNativeApp } from "@/lib/platform";
+import { exportMyData, deleteAccount } from "@/lib/data";
 
 const copy = {
   en: {
@@ -53,6 +59,19 @@ const copy = {
     about: "About",
     help: "Help & support",
     logout: "Log out",
+    dataPrivacy: "Data & rights",
+    exportData: "Export my data",
+    exportSub: "Download everything we hold on you",
+    exporting: "Preparing…",
+    fcra: "FCRA notice",
+    fcraSub: "How you may use this app",
+    deleteAccount: "Delete my account",
+    deleteSub: "Permanently erase your data",
+    delTitle: "Delete your account?",
+    delBody: "This permanently erases your profile, contracts, payments, facts, ratings and messages. This cannot be undone.",
+    delConfirm: "Yes, delete everything",
+    deleting: "Deleting…",
+    cancel: "Cancel",
   },
   es: {
     title: "Ajustes",
@@ -78,6 +97,19 @@ const copy = {
     about: "Acerca de",
     help: "Ayuda y soporte",
     logout: "Cerrar sesión",
+    dataPrivacy: "Datos y derechos",
+    exportData: "Exportar mis datos",
+    exportSub: "Descarga todo lo que tenemos de ti",
+    exporting: "Preparando…",
+    fcra: "Aviso FCRA",
+    fcraSub: "Cómo puedes usar esta app",
+    deleteAccount: "Eliminar mi cuenta",
+    deleteSub: "Borra tus datos permanentemente",
+    delTitle: "¿Eliminar tu cuenta?",
+    delBody: "Esto borra permanentemente tu perfil, contratos, pagos, hechos, calificaciones y mensajes. No se puede deshacer.",
+    delConfirm: "Sí, eliminar todo",
+    deleting: "Eliminando…",
+    cancel: "Cancelar",
   },
 };
 
@@ -90,7 +122,42 @@ export default function SettingsScreen() {
   const [faceId, setFaceId] = usePref("biometric", false);
   const [notify, setNotify] = usePref("notifications", true);
   const [bioMsg, setBioMsg] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const name = displayName(profile, user?.email, locale);
+
+  async function handleExport() {
+    if (!user || exporting) return;
+    setExporting(true);
+    try {
+      const data = await exportMyData(user.id);
+      data.generated = new Date().toISOString();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tenant-trust-data-${user.id.slice(0, 8)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      await signOut();
+    } catch {
+      setDeleting(false);
+      setConfirmDel(false);
+    }
+  }
 
   async function toggleFaceId(next: boolean) {
     setBioMsg(null);
@@ -161,6 +228,55 @@ export default function SettingsScreen() {
             <ListRow icon={<Info className="h-5 w-5" />} title={c.about} tone="neutral" right={chevron} href="/about" />
             <ListRow icon={<CircleHelp className="h-5 w-5" />} title={c.help} tone="neutral" right={chevron} href="/help" />
           </Card>
+
+          {/* Data & rights */}
+          <SectionTitle>{c.dataPrivacy}</SectionTitle>
+          <Card className="divide-y divide-line px-3.5">
+            <ListRow
+              icon={exporting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+              title={c.exportData}
+              subtitle={exporting ? c.exporting : c.exportSub}
+              tone="brand"
+              onClick={handleExport}
+            />
+            <ListRow icon={<Scale className="h-5 w-5" />} title={c.fcra} subtitle={c.fcraSub} tone="neutral" right={chevron} href="/legal/fcra" />
+            <ListRow
+              icon={<Trash2 className="h-5 w-5" />}
+              title={<span className="text-danger">{c.deleteAccount}</span>}
+              subtitle={c.deleteSub}
+              tone="danger"
+              onClick={() => setConfirmDel(true)}
+            />
+          </Card>
+
+          {confirmDel && (
+            <div className="mt-3 rounded-2xl border border-danger/30 bg-danger-tint p-4">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+                <div>
+                  <div className="text-[14px] font-bold text-danger">{c.delTitle}</div>
+                  <p className="mt-1 text-[13px] leading-snug text-ink-soft">{c.delBody}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => setConfirmDel(false)}
+                  disabled={deleting}
+                  className="flex-1 rounded-xl border border-line bg-surface px-4 py-2.5 text-[14px] font-semibold text-ink-soft"
+                >
+                  {c.cancel}
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-danger px-4 py-2.5 text-[14px] font-bold text-white disabled:opacity-70"
+                >
+                  {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  {deleting ? c.deleting : c.delConfirm}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Log out */}
           <Card className="mt-6 px-3.5">

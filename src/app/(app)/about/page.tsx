@@ -26,6 +26,7 @@ const copy = {
     legal: "Legal",
     terms: "Terms of Service",
     privacy: "Privacy Policy",
+    fcra: "FCRA notice",
     version: "Version",
     madeWith: "Made with care for renters and owners alike.",
   },
@@ -44,6 +45,7 @@ const copy = {
     legal: "Legal",
     terms: "Términos del servicio",
     privacy: "Política de privacidad",
+    fcra: "Aviso FCRA",
     version: "Versión",
     madeWith: "Hecho con cuidado para inquilinos y propietarios por igual.",
   },
@@ -81,6 +83,7 @@ export default function AboutScreen() {
           <Card className="divide-y divide-line px-3.5">
             <ListRow icon={<FileText className="h-5 w-5" />} title={c.terms} right={chevron} href="/legal/terms" />
             <ListRow icon={<Lock className="h-5 w-5" />} title={c.privacy} right={chevron} href="/legal/privacy" />
+            <ListRow icon={<Scale className="h-5 w-5" />} title={c.fcra} right={chevron} href="/legal/fcra" />
           </Card>
 
           <div className="mt-6 flex flex-col items-center gap-1 text-center">

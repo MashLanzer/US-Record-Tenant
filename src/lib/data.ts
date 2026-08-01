@@ -609,6 +609,12 @@ export function describeNotification(
         desc: es ? "La solicitud no fue aprobada." : "The request wasn't approved.",
         tone: "amber",
       };
+    case "report_resolved":
+      return {
+        title: es ? "Un hecho fue resuelto" : "A fact was resolved",
+        desc: es ? "La disputa se cerró como resuelta." : "The dispute was closed as resolved.",
+        tone: "verify",
+      };
     case "evidence_added":
     case "document_added":
       return {
@@ -869,6 +875,26 @@ export async function deleteReport(reportId: string): Promise<void> {
   if (!typed) throw new Error("demo-mode");
   const db = typed as unknown as SupabaseClient;
   const { error } = await db.from("reports").delete().eq("id", reportId);
+  if (error) throw new Error(error.message);
+}
+
+export type FlagReason = "abuse" | "false" | "harassment" | "other";
+
+/** Flag a fact for review (any party to the fact). */
+export async function flagContent(reportId: string, reason: FlagReason, note: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("flag_content", { p_report_id: reportId, p_reason: reason, p_note: note });
+  if (error) throw new Error(error.message);
+}
+
+/** The author formally resolves a disputed fact (closes it as settled). */
+export async function resolveReport(reportId: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("resolve_report", { p_report_id: reportId });
   if (error) throw new Error(error.message);
 }
 
@@ -1486,5 +1512,57 @@ export async function updatePassword(newPassword: string): Promise<void> {
   const sb = getSupabase();
   if (!sb) throw new Error("demo-mode");
   const { error } = await sb.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+}
+
+/* --------------------------------------------------------- data rights (GDPR/CCPA) */
+/**
+ * Gather all data the user owns into a single JSON object for portability.
+ * Read-only; each table is RLS-scoped to the caller.
+ */
+export async function exportMyData(userId: string): Promise<Record<string, unknown>> {
+  const sb = getSupabase();
+  const base = { exported_for: userId, generated: "" as string };
+  if (!sb) return { ...base, note: "demo-mode: no backend data" };
+
+  const grab = async (table: string, column: string) => {
+    const { data } = await sb.from(table).select("*").eq(column, userId);
+    return data ?? [];
+  };
+
+  const [profile, properties, leasesLandlord, leasesTenant, notifications, ratingsGiven, ratingsReceived, reportsBy, reportsAbout] =
+    await Promise.all([
+      sb.from("profiles").select("*").eq("id", userId).maybeSingle().then((r) => r.data),
+      grab("properties", "owner_id"),
+      grab("leases", "landlord_id"),
+      grab("leases", "tenant_id"),
+      grab("notifications", "user_id"),
+      grab("ratings", "rater_id"),
+      grab("ratings", "ratee_id"),
+      grab("reports", "author_id"),
+      grab("reports", "subject_id"),
+    ]);
+
+  return {
+    ...base,
+    profile,
+    properties,
+    leases: { as_landlord: leasesLandlord, as_tenant: leasesTenant },
+    ratings: { given: ratingsGiven, received: ratingsReceived },
+    facts: { by_me: reportsBy, about_me: reportsAbout },
+    notifications,
+  };
+}
+
+/**
+ * Permanently delete the caller's account data (cascades everything they own).
+ * The auth login is retained until an admin removes it, but all app data is
+ * wiped. The caller should sign out immediately after.
+ */
+export async function deleteAccount(): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("delete_account");
   if (error) throw new Error(error.message);
 }

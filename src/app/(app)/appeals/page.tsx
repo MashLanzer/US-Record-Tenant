@@ -12,6 +12,8 @@ import {
   Send,
   Flag,
   MessageSquareText,
+  CheckCircle2,
+  AlertOctagon,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
@@ -24,9 +26,12 @@ import {
   fetchDisputeCases,
   disputeReport,
   addDisputeEntry,
+  resolveReport,
+  flagContent,
   uploadDocument,
   reportTypeLabel,
   type DisputeCase,
+  type FlagReason,
 } from "@/lib/data";
 
 const copy = {
@@ -57,6 +62,20 @@ const copy = {
     hasEvidence: "Evidence attached",
     reassure: "Facts stay on record, but a dispute marks them as contested and shows both sides. Nothing is a verdict — it's a transparent account.",
     err: "Could not submit. Please try again.",
+    markResolved: "Mark as resolved",
+    resolving: "Resolving…",
+    resolveNote: "You recorded this fact. Resolving closes the dispute as settled.",
+    flagBtn: "Report a problem",
+    flagTitle: "Report this fact for review",
+    rAbuse: "Abusive",
+    rFalse: "False / inaccurate",
+    rHarass: "Harassment",
+    rOther: "Other",
+    flagNotePh: "Add context for the review team (optional).",
+    flagSend: "Submit report",
+    flagSending: "Submitting…",
+    flagged: "Reported. Our team will review it.",
+    cancel: "Cancel",
   },
   es: {
     title: "Centro de apelaciones",
@@ -85,6 +104,20 @@ const copy = {
     hasEvidence: "Evidencia adjunta",
     reassure: "Los hechos permanecen en el historial, pero una disputa los marca como controvertidos y muestra ambas versiones. Nada es un veredicto — es un relato transparente.",
     err: "No se pudo enviar. Inténtalo de nuevo.",
+    markResolved: "Marcar como resuelto",
+    resolving: "Resolviendo…",
+    resolveNote: "Tú registraste este hecho. Resolver cierra la disputa como saldada.",
+    flagBtn: "Reportar un problema",
+    flagTitle: "Reportar este hecho para revisión",
+    rAbuse: "Abusivo",
+    rFalse: "Falso / inexacto",
+    rHarass: "Acoso",
+    rOther: "Otro",
+    flagNotePh: "Añade contexto para el equipo de revisión (opcional).",
+    flagSend: "Enviar reporte",
+    flagSending: "Enviando…",
+    flagged: "Reportado. Nuestro equipo lo revisará.",
+    cancel: "Cancelar",
   },
 };
 
@@ -167,12 +200,48 @@ function DisputeCard({
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [resolving, setResolving] = useState(false);
+  const [showFlag, setShowFlag] = useState(false);
+  const [flagReason, setFlagReason] = useState<FlagReason>("false");
+  const [flagNote, setFlagNote] = useState("");
+  const [flagBusy, setFlagBusy] = useState(false);
+  const [flagged, setFlagged] = useState(false);
+
   const isSubject = cs.direction === "about_me";
   const isDisputed = cs.status === "disputed";
   const isResolved = cs.status === "resolved";
   // The subject can open a dispute; both parties can add to an ongoing one.
   const canDispute = isSubject && cs.status === "open";
   const canAdd = isDisputed;
+  // The author can formally resolve a disputed fact they recorded.
+  const canResolve = cs.direction === "by_me" && isDisputed;
+
+  async function handleResolve() {
+    if (resolving) return;
+    setResolving(true);
+    try {
+      await resolveReport(cs.reportId);
+      onChanged();
+    } catch {
+      setError(c.err);
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  async function handleFlag() {
+    if (flagBusy) return;
+    setFlagBusy(true);
+    try {
+      await flagContent(cs.reportId, flagReason, flagNote.trim());
+      setFlagged(true);
+      setShowFlag(false);
+    } catch {
+      setError(c.err);
+    } finally {
+      setFlagBusy(false);
+    }
+  }
 
   async function handleSubmit(kind: "open" | "add") {
     if (busy || (!statement.trim() && !file)) return;
@@ -335,6 +404,86 @@ function DisputeCard({
               </Button>
             </div>
           )}
+
+          {/* Author resolves a disputed fact */}
+          {canResolve && (
+            <div className="mt-4 border-t border-line pt-4">
+              <p className="mb-2 text-[12px] leading-snug text-ink-faint">{c.resolveNote}</p>
+              <Button
+                full
+                variant="secondary"
+                disabled={resolving}
+                onClick={handleResolve}
+                icon={resolving ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <CheckCircle2 className="h-[18px] w-[18px]" />}
+              >
+                {resolving ? c.resolving : c.markResolved}
+              </Button>
+            </div>
+          )}
+
+          {/* Moderation: report the fact for review */}
+          <div className="mt-4 border-t border-line pt-3">
+            {flagged ? (
+              <p className="flex items-center justify-center gap-1.5 text-[12.5px] font-medium text-verify">
+                <Check className="h-4 w-4" strokeWidth={3} /> {c.flagged}
+              </p>
+            ) : showFlag ? (
+              <div>
+                <div className="mb-2 text-[13px] font-bold text-ink">{c.flagTitle}</div>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["abuse", c.rAbuse],
+                      ["false", c.rFalse],
+                      ["harassment", c.rHarass],
+                      ["other", c.rOther],
+                    ] as [FlagReason, string][]
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setFlagReason(key)}
+                      className={
+                        "rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors " +
+                        (flagReason === key
+                          ? "border-danger/30 bg-danger-tint text-danger"
+                          : "border-line bg-surface text-ink-soft")
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={flagNote}
+                  onChange={(e) => setFlagNote(e.target.value)}
+                  placeholder={c.flagNotePh}
+                  rows={2}
+                  className="mt-2.5 w-full resize-none rounded-xl border-[1.5px] border-line-strong bg-surface-2 px-3.5 py-2.5 text-[14px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-tint"
+                />
+                <div className="mt-2 flex gap-2">
+                  <Button variant="secondary" full onClick={() => setShowFlag(false)} disabled={flagBusy}>
+                    {c.cancel}
+                  </Button>
+                  <Button
+                    full
+                    className="bg-danger text-white hover:bg-danger"
+                    disabled={flagBusy}
+                    onClick={handleFlag}
+                    icon={flagBusy ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <AlertOctagon className="h-[18px] w-[18px]" />}
+                  >
+                    {flagBusy ? c.flagSending : c.flagSend}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowFlag(true)}
+                className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-faint hover:text-danger"
+              >
+                <AlertOctagon className="h-4 w-4" /> {c.flagBtn}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </Card>
