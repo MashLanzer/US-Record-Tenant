@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/lib/theme";
 import { LocaleProvider } from "@/lib/i18n";
 import { AuthProvider } from "@/lib/auth";
+import { NativeBoot } from "@/components/native-boot";
 
 export const metadata: Metadata = {
   title: "Tenant Trust — Trust, verified",
@@ -34,7 +35,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <ThemeProvider>
           <LocaleProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              <NativeBoot />
+              {children}
+            </AuthProvider>
           </LocaleProvider>
         </ThemeProvider>
       </body>

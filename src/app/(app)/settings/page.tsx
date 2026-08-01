@@ -15,6 +15,7 @@ import {
   CircleHelp,
   LogOut,
 } from "lucide-react";
+import { useState } from "react";
 import { AppHeader, SectionTitle } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
 import { Card, ListRow, Toggle } from "@/components/ui/primitives";
@@ -24,6 +25,8 @@ import { useT, useLocale } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { displayName } from "@/lib/identity";
 import { usePref } from "@/lib/prefs";
+import { isBiometricAvailable } from "@/lib/biometric";
+import { isNativeApp } from "@/lib/platform";
 
 const copy = {
   en: {
@@ -34,6 +37,8 @@ const copy = {
     security: "Security",
     faceId: "Biometric unlock",
     faceIdSub: "Use Face ID / fingerprint on this device",
+    faceIdWeb: "Biometric unlock works in the mobile app. Install Tenant Trust on your phone to enable it.",
+    faceIdNone: "No biometrics are set up on this device. Add Face ID or a fingerprint in your device settings first.",
     changePassword: "Change password",
     privacy: "Privacy",
     consent: "Consent & data",
@@ -57,6 +62,8 @@ const copy = {
     security: "Seguridad",
     faceId: "Desbloqueo biométrico",
     faceIdSub: "Usa Face ID / huella en este dispositivo",
+    faceIdWeb: "El desbloqueo biométrico funciona en la app móvil. Instala Tenant Trust en tu teléfono para activarlo.",
+    faceIdNone: "No hay biometría configurada en este dispositivo. Añade Face ID o una huella en los ajustes del sistema primero.",
     changePassword: "Cambiar contraseña",
     privacy: "Privacidad",
     consent: "Consentimiento y datos",
@@ -82,7 +89,23 @@ export default function SettingsScreen() {
   const { signOut, profile, user } = useAuth();
   const [faceId, setFaceId] = usePref("biometric", false);
   const [notify, setNotify] = usePref("notifications", true);
+  const [bioMsg, setBioMsg] = useState<string | null>(null);
   const name = displayName(profile, user?.email, locale);
+
+  async function toggleFaceId(next: boolean) {
+    setBioMsg(null);
+    if (!next) {
+      setFaceId(false);
+      return;
+    }
+    if (!isNativeApp()) {
+      setBioMsg(c.faceIdWeb);
+      return;
+    }
+    const ok = await isBiometricAvailable();
+    if (ok) setFaceId(true);
+    else setBioMsg(c.faceIdNone);
+  }
 
   return (
     <>
@@ -104,10 +127,13 @@ export default function SettingsScreen() {
               title={c.faceId}
               subtitle={c.faceIdSub}
               tone="verify"
-              right={<Toggle checked={faceId} onChange={setFaceId} />}
+              right={<Toggle checked={faceId} onChange={toggleFaceId} />}
             />
             <ListRow icon={<Lock className="h-5 w-5" />} title={c.changePassword} right={chevron} href="/settings/password" />
           </Card>
+          {bioMsg && (
+            <p className="mt-2 rounded-xl bg-amber-tint px-3.5 py-2.5 text-[12.5px] font-medium text-amber">{bioMsg}</p>
+          )}
 
           {/* Privacy */}
           <SectionTitle>{c.privacy}</SectionTitle>

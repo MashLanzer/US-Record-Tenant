@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@aparajita/capacitor-biometric-auth':
+        specifier: ^8.0.2
+        version: 8.0.2
       '@capacitor/android':
         specifier: ^6.2.1
         version: 6.2.1(@capacitor/core@6.2.1)
@@ -17,6 +20,9 @@ importers:
       '@capacitor/browser':
         specifier: ^6.0.6
         version: 6.0.6(@capacitor/core@6.2.1)
+      '@capacitor/splash-screen':
+        specifier: ^6.0.4
+        version: 6.0.4(@capacitor/core@6.2.1)
       '@supabase/supabase-js':
         specifier: ^2.111.0
         version: 2.111.0
@@ -73,6 +79,10 @@ packages:
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
 
+  '@aparajita/capacitor-biometric-auth@8.0.2':
+    resolution: {integrity: sha512-f5EHwJYkwQDM/FmoZoyOTmBs/3XEcYURZDUNyps9+Fn7WrgojtJuZP8GhfW7KrQGqCok+ctDd369nEAmNiTxfw==}
+    engines: {node: '>=18'}
+
   '@capacitor/android@6.2.1':
     resolution: {integrity: sha512-8gd4CIiQO5LAIlPIfd5mCuodBRxMMdZZEdj8qG8m+dQ1sQ2xyemVpzHmRK8qSCHorsBUCg3D62j2cp6bEBAkdw==}
     peerDependencies:
@@ -95,6 +105,16 @@ packages:
 
   '@capacitor/core@6.2.1':
     resolution: {integrity: sha512-urZwxa7hVE/BnA18oCFAdizXPse6fCKanQyEqpmz6cBJ2vObwMpyJDG5jBeoSsgocS9+Ax+9vb4ducWJn0y2qQ==}
+
+  '@capacitor/ios@6.2.1':
+    resolution: {integrity: sha512-tbMlQdQjxe1wyaBvYVU1yTojKJjgluZQsJkALuJxv/6F8QTw5b6vd7X785O/O7cMpIAZfUWo/vtAHzFkRV+kXw==}
+    peerDependencies:
+      '@capacitor/core': ^6.2.0
+
+  '@capacitor/splash-screen@6.0.4':
+    resolution: {integrity: sha512-uJXR+28cdaie7zIIUBvgkWgHim6Gr1itJym9voIMTmrjXkOaPtejwxYJsdQWPJz9zgGnSbXuC1mNNibLgv3OpQ==}
+    peerDependencies:
+      '@capacitor/core': ^6.0.0
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
@@ -1051,6 +1071,13 @@ snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
 
+  '@aparajita/capacitor-biometric-auth@8.0.2':
+    dependencies:
+      '@capacitor/android': 6.2.1(@capacitor/core@6.2.1)
+      '@capacitor/app': 6.0.3(@capacitor/core@6.2.1)
+      '@capacitor/core': 6.2.1
+      '@capacitor/ios': 6.2.1(@capacitor/core@6.2.1)
+
   '@capacitor/android@6.2.1(@capacitor/core@6.2.1)':
     dependencies:
       '@capacitor/core': 6.2.1
@@ -1088,6 +1115,14 @@ snapshots:
   '@capacitor/core@6.2.1':
     dependencies:
       tslib: 2.8.1
+
+  '@capacitor/ios@6.2.1(@capacitor/core@6.2.1)':
+    dependencies:
+      '@capacitor/core': 6.2.1
+
+  '@capacitor/splash-screen@6.0.4(@capacitor/core@6.2.1)':
+    dependencies:
+      '@capacitor/core': 6.2.1
 
   '@emnapi/runtime@1.11.3':
     dependencies:
