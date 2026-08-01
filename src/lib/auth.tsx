@@ -8,13 +8,58 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { Profile, Role } from "@/lib/supabase/types";
+import { isNativeApp } from "@/lib/platform";
 import { me } from "@/lib/mock";
 
 type AuthUser = { id: string; email: string | null };
 
 type AuthResult = { error: string | null };
+
+// Deep link the native app registers so OAuth can return into it.
+const NATIVE_OAUTH_REDIRECT = "tenanttrust://login-callback";
+
+/**
+ * Native (Capacitor) Google sign-in: open the provider URL in an in-app
+ * browser, then catch the `tenanttrust://login-callback?code=...` deep link,
+ * exchange the code for a session, and close the browser.
+ */
+async function signInNativeGoogle(supabase: SupabaseClient): Promise<AuthResult> {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: NATIVE_OAUTH_REDIRECT, skipBrowserRedirect: true },
+  });
+  if (error || !data?.url) return { error: error?.message ?? "Could not start Google sign-in" };
+
+  const { Browser } = await import("@capacitor/browser");
+  const { App } = await import("@capacitor/app");
+
+  return new Promise<AuthResult>((resolve) => {
+    let handle: { remove: () => Promise<void> } | null = null;
+    let settled = false;
+
+    App.addListener("appUrlOpen", async ({ url }: { url: string }) => {
+      if (!url.startsWith(NATIVE_OAUTH_REDIRECT) || settled) return;
+      settled = true;
+      let res: AuthResult = { error: null };
+      try {
+        const code = new URL(url).searchParams.get("code");
+        if (code) await supabase.auth.exchangeCodeForSession(code);
+      } catch {
+        res = { error: "Sign-in failed" };
+      }
+      await Browser.close().catch(() => {});
+      if (handle) await handle.remove().catch(() => {});
+      resolve(res);
+    }).then((h) => {
+      handle = h;
+    });
+
+    Browser.open({ url: data.url });
+  });
+}
 
 type AuthContextValue = {
   loading: boolean;
@@ -145,6 +190,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithOAuth = useCallback<AuthContextValue["signInWithOAuth"]>(async (provider) => {
     const supabase = getSupabase();
     if (!supabase) return { error: null };
+
+    // Native app → deep-link flow that returns into the app.
+    if (provider === "google" && isNativeApp()) {
+      return signInNativeGoogle(supabase);
+    }
+
+    // Web → standard full-page redirect back to /home.
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: { redirectTo: typeof window !== "undefined" ? `${window.location.origin}/home/` : undefined },

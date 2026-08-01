@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ScanFace } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { Button, Field, Input } from "@/components/ui/primitives";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { isNativeApp } from "@/lib/platform";
 
 const copy = {
   en: {
@@ -58,9 +57,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [native, setNative] = useState(false);
-
-  useEffect(() => setNative(isNativeApp()), []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -81,7 +77,12 @@ export default function LoginScreen() {
       return;
     }
     const { error } = await signInWithOAuth(provider);
-    if (error) setError(error);
+    if (error) {
+      setError(error);
+      return;
+    }
+    // On web this line isn't reached (full-page redirect); on native it is.
+    router.push("/home");
   }
 
   return (
@@ -134,26 +135,22 @@ export default function LoginScreen() {
         {c.forgot}
       </a>
 
-      {!native && (
-        <>
-          <div className="my-6 flex items-center gap-3">
-            <span className="h-px flex-1 bg-line" />
-            <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">{c.or}</span>
-            <span className="h-px flex-1 bg-line" />
-          </div>
+      <div className="my-6 flex items-center gap-3">
+        <span className="h-px flex-1 bg-line" />
+        <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">{c.or}</span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
 
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            full
-            icon={<GoogleGlyph />}
-            onClick={() => handleOAuth("google")}
-          >
-            {c.google}
-          </Button>
-        </>
-      )}
+      <Button
+        type="button"
+        variant="secondary"
+        size="lg"
+        full
+        icon={<GoogleGlyph />}
+        onClick={() => handleOAuth("google")}
+      >
+        {c.google}
+      </Button>
     </AuthShell>
   );
 }
