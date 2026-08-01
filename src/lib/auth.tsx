@@ -26,6 +26,7 @@ type AuthContextValue = {
   signInWithOAuth: (provider: "google" | "apple") => Promise<AuthResult>;
   resetPassword: (email: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -59,28 +60,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const supabase = getSupabase();
     if (!supabase) return;
 
+    // When returning from an OAuth/magic-link redirect the URL carries a `code`
+    // that supabase-js exchanges asynchronously. Keep "loading" until that
+    // finishes so the guard doesn't bounce us away before the session lands.
+    const hasAuthCallback =
+      typeof window !== "undefined" &&
+      (/[?&](code|error_description)=/.test(window.location.search) ||
+        window.location.hash.includes("access_token"));
+
+    const cleanUrl = () => {
+      if (typeof window === "undefined") return;
+      if (/[?&]code=/.test(window.location.search) || window.location.hash.includes("access_token")) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("code");
+        window.history.replaceState({}, "", url.pathname + url.hash.replace(/access_token.*$/, ""));
+      }
+    };
+
     supabase.auth.getSession().then(({ data }) => {
       const u = data.session?.user;
       if (u) {
         setUser({ id: u.id, email: u.email ?? null });
         void loadProfile(u.id);
+        setLoading(false);
+      } else if (!hasAuthCallback) {
+        setLoading(false);
       }
-      setLoading(false);
+      // else: OAuth code present but not exchanged yet → wait for onAuthStateChange
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user;
       if (u) {
         setUser({ id: u.id, email: u.email ?? null });
         void loadProfile(u.id);
+        cleanUrl();
+        setLoading(false);
       } else {
         setUser(null);
         setProfile(null);
+        // Don't stop the loader on the initial null tick while an OAuth code is
+        // still being exchanged.
+        if (!(event === "INITIAL_SESSION" && hasAuthCallback)) setLoading(false);
       }
     });
 
-    return () => sub.subscription.unsubscribe();
+    // Safety net: never hang on the loader.
+    const t = setTimeout(() => setLoading(false), 6000);
+
+    return () => {
+      sub.subscription.unsubscribe();
+      clearTimeout(t);
+    };
   }, [demoMode, loadProfile]);
+
+  const refreshProfile = useCallback(async () => {
+    if (user) await loadProfile(user.id);
+  }, [user, loadProfile]);
 
   const signUp = useCallback<AuthContextValue["signUp"]>(
     async (email, password, role, fullName) => {
@@ -133,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ loading, demoMode, user, profile, signUp, signIn, signInWithOAuth, resetPassword, signOut }}
+      value={{ loading, demoMode, user, profile, signUp, signIn, signInWithOAuth, resetPassword, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Shield, Users, Check, type LucideIcon } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
 import { Button } from "@/components/ui/primitives";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/lib/auth";
 
 const copy = {
   en: {
@@ -33,7 +35,14 @@ const icons: LucideIcon[] = [Shield, Users, Check];
 
 export default function WelcomeScreen() {
   const c = useT(copy);
+  const router = useRouter();
+  const { user, demoMode } = useAuth();
   const [index, setIndex] = useState(0);
+
+  // If a real session lands here (e.g. after an OAuth redirect), move into the app.
+  useEffect(() => {
+    if (!demoMode && user) router.replace("/home");
+  }, [user, demoMode, router]);
   const last = c.slides.length - 1;
   const slide = c.slides[index];
   const Icon = icons[index];

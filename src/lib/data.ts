@@ -629,7 +629,7 @@ export async function listDocuments(userId: string, kind?: string): Promise<DocI
 export async function uploadDocument(
   userId: string,
   file: File,
-  kind: "document" | "evidence" | "lease" = "document",
+  kind: "document" | "evidence" | "lease" | "verification" = "document",
   leaseId?: string,
 ): Promise<void> {
   const typed = getSupabase();
