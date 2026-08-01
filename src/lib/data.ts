@@ -615,6 +615,12 @@ export function describeNotification(
         desc: es ? "La disputa se cerró como resuelta." : "The dispute was closed as resolved.",
         tone: "verify",
       };
+    case "adverse_action":
+      return {
+        title: es ? "Aviso de acción adversa" : "Adverse action notice",
+        desc: es ? "Recibiste un aviso. Conoce tus derechos." : "You received a notice. Know your rights.",
+        tone: "amber",
+      };
     case "evidence_added":
     case "document_added":
       return {
@@ -960,6 +966,7 @@ export type DisputeCase = {
   direction: "about_me" | "by_me";
   address: string;
   timeLabel: string;
+  reinvestigationDue: string | null;
   entries: DisputeEntry[];
 };
 
@@ -969,7 +976,7 @@ export async function fetchDisputeCases(userId: string): Promise<DisputeCase[]> 
   if (!sb) return [];
   const { data, error } = await sb
     .from("reports")
-    .select("id, lease_id, type, description, status, author_id, subject_id, created_at, leases(address)")
+    .select("id, lease_id, type, description, status, author_id, subject_id, created_at, reinvestigation_due, leases(address)")
     .or(`author_id.eq.${userId},subject_id.eq.${userId}`)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
@@ -1008,6 +1015,7 @@ export async function fetchDisputeCases(userId: string): Promise<DisputeCase[]> 
       direction: r.author_id === userId ? "by_me" : "about_me",
       address,
       timeLabel: shortDate((r.created_at as string) ?? ""),
+      reinvestigationDue: (r.reinvestigation_due as string) ?? null,
       entries: entriesByReport.get(r.id as string) ?? [],
     };
   });
@@ -1400,13 +1408,81 @@ export async function fetchAccessStatus(userId: string, subjectId: string): Prom
   return "none";
 }
 
-/** Ask a subject for access to their full trust report. */
-export async function requestAccess(subjectId: string, message: string): Promise<void> {
+export type AccessPurpose = "tenant_screening" | "existing_tenant" | "applicant_consent" | "other";
+
+/** Ask a subject for access to their full trust report, with a permissible purpose. */
+export async function requestAccess(
+  subjectId: string,
+  purpose: AccessPurpose,
+  message: string,
+): Promise<void> {
   const typed = getSupabase();
   if (!typed) throw new Error("demo-mode");
   const db = typed as unknown as SupabaseClient;
-  const { error } = await db.rpc("request_access", { p_subject: subjectId, p_message: message });
+  const { error } = await db.rpc("request_access", {
+    p_subject: subjectId,
+    p_purpose: purpose,
+    p_message: message,
+  });
   if (error) throw new Error(error.message);
+}
+
+/* ------------------------------------------------------- FCRA: adverse action */
+export type AdverseDecision = "denied" | "conditional" | "deposit_increase" | "cosigner_required" | "other";
+
+export type AdverseActionItem = {
+  id: string;
+  issuerId: string;
+  issuerName: string;
+  decision: AdverseDecision;
+  reasons: string[];
+  note: string | null;
+  timeLabel: string;
+  createdAt: string;
+};
+
+/** Issue an FCRA adverse-action notice to a subject you screened. */
+export async function issueAdverseAction(
+  subjectId: string,
+  decision: AdverseDecision,
+  reasons: string[],
+  note: string,
+): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("issue_adverse_action", {
+    p_subject: subjectId,
+    p_decision: decision,
+    p_reasons: reasons,
+    p_note: note,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Adverse-action notices issued to the current user. */
+export async function fetchAdverseActionsReceived(userId: string): Promise<AdverseActionItem[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("adverse_actions")
+    .select("id, issuer_id, decision, reasons, note, created_at, issuer:profiles!adverse_actions_issuer_id_fkey(full_name)")
+    .eq("subject_id", userId)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((a: Record<string, unknown>) => {
+    const issuer = (a.issuer ?? {}) as { full_name?: string };
+    return {
+      id: a.id as string,
+      issuerId: a.issuer_id as string,
+      issuerName: issuer.full_name || "—",
+      decision: (a.decision as AdverseDecision) ?? "other",
+      reasons: (a.reasons as string[]) ?? [],
+      note: (a.note as string) ?? null,
+      timeLabel: shortDate((a.created_at as string) ?? ""),
+      createdAt: (a.created_at as string) ?? "",
+    };
+  });
 }
 
 export type TrustReport = {

@@ -13,6 +13,8 @@ import {
   Star,
   Flag,
   Scale,
+  Gavel,
+  Check,
 } from "lucide-react";
 import { Screen } from "@/components/app-shell";
 import { AppHeader } from "@/components/app-header";
@@ -31,6 +33,7 @@ import {
   type PublicProfileData,
   type TrustReport,
   type AccessStatus,
+  type AccessPurpose,
 } from "@/lib/data";
 
 const copy = {
@@ -61,6 +64,14 @@ const copy = {
     noData: "No verified history yet.",
     self: "This is your public trust profile — this is what others see.",
     fcraNote: "Not a consumer report. Don't use it for FCRA-covered credit, housing, insurance or employment decisions.",
+    purposeTitle: "Why do you need this report?",
+    pScreening: "Screening a rental applicant",
+    pExisting: "Existing tenant of mine",
+    pConsent: "The person asked me to",
+    pOther: "Other permissible purpose",
+    attest: "I certify I have a permissible purpose to obtain this information and will use it only for that purpose, in compliance with the FCRA and Fair Housing laws.",
+    issueAA: "Issue adverse action notice",
+    issueAASub: "Required if you take adverse action based on this report.",
   },
   es: {
     title: "Perfil de confianza",
@@ -89,8 +100,23 @@ const copy = {
     noData: "Aún no hay historial verificado.",
     self: "Este es tu perfil público de confianza — esto es lo que ven los demás.",
     fcraNote: "No es un informe del consumidor. No lo uses para decisiones de crédito, vivienda, seguros o empleo cubiertas por la FCRA.",
+    purposeTitle: "¿Por qué necesitas este reporte?",
+    pScreening: "Evaluar a un solicitante de alquiler",
+    pExisting: "Es mi inquilino actual",
+    pConsent: "La persona me lo pidió",
+    pOther: "Otro propósito permisible",
+    attest: "Certifico que tengo un propósito permisible para obtener esta información y la usaré solo para ese fin, cumpliendo la FCRA y las leyes de Vivienda Justa.",
+    issueAA: "Emitir aviso de acción adversa",
+    issueAASub: "Requerido si tomas una acción adversa con base en este reporte.",
   },
 };
+
+const PURPOSES: { key: AccessPurpose; label: keyof (typeof copy)["en"] }[] = [
+  { key: "tenant_screening", label: "pScreening" },
+  { key: "existing_tenant", label: "pExisting" },
+  { key: "applicant_consent", label: "pConsent" },
+  { key: "other", label: "pOther" },
+];
 
 export default function PublicTrustScreen() {
   const c = useT(copy);
@@ -102,6 +128,8 @@ export default function PublicTrustScreen() {
   const [report, setReport] = useState<TrustReport | null>(null);
   const [status, setStatus] = useState<AccessStatus>("none");
   const [message, setMessage] = useState("");
+  const [purpose, setPurpose] = useState<AccessPurpose>("tenant_screening");
+  const [attested, setAttested] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -119,10 +147,10 @@ export default function PublicTrustScreen() {
   }, [user]);
 
   async function handleRequest() {
-    if (!profile || busy) return;
+    if (!profile || busy || !attested) return;
     setBusy(true);
     try {
-      await requestAccess(profile.id, message.trim());
+      await requestAccess(profile.id, purpose, message.trim());
       setStatus("pending");
     } catch {
       /* ignore */
@@ -246,6 +274,18 @@ export default function PublicTrustScreen() {
               <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-ink-faint">
                 <Lock className="mt-0.5 h-3 w-3 shrink-0" /> {c.fcraNote}
               </p>
+
+              {!isSelf && (
+                <Button
+                  href={`/adverse-action?subject=${p.id}`}
+                  variant="ghost"
+                  full
+                  className="mt-4 border border-amber/30 text-amber"
+                  icon={<Gavel className="h-[18px] w-[18px]" />}
+                >
+                  {c.issueAA}
+                </Button>
+              )}
             </>
           ) : !isSelf ? (
             /* Gated — consent flow */
@@ -274,11 +314,13 @@ export default function PublicTrustScreen() {
                   <Button
                     full
                     className="mt-3"
-                    disabled={busy}
-                    onClick={handleRequest}
-                    icon={busy ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Send className="h-[18px] w-[18px]" />}
+                    onClick={() => {
+                      setStatus("none");
+                      setAttested(false);
+                    }}
+                    icon={<Send className="h-[18px] w-[18px]" />}
                   >
-                    {busy ? c.requesting : c.requestAgain}
+                    {c.requestAgain}
                   </Button>
                 </>
               ) : (
@@ -292,6 +334,25 @@ export default function PublicTrustScreen() {
                       <p className="mt-1 text-[13px] leading-snug text-ink-soft">{c.gatedBody}</p>
                     </div>
                   </div>
+                  {/* Permissible purpose */}
+                  <div className="mt-3 text-[12.5px] font-bold text-ink-soft">{c.purposeTitle}</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {PURPOSES.map((p) => (
+                      <button
+                        key={p.key}
+                        onClick={() => setPurpose(p.key)}
+                        className={
+                          "rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors " +
+                          (purpose === p.key
+                            ? "border-brand/30 bg-brand-tint text-brand"
+                            : "border-line bg-surface text-ink-soft")
+                        }
+                      >
+                        {c[p.label]}
+                      </button>
+                    ))}
+                  </div>
+
                   <textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
@@ -299,10 +360,29 @@ export default function PublicTrustScreen() {
                     rows={2}
                     className="mt-3 w-full resize-none rounded-xl border-[1.5px] border-line-strong bg-surface-2 px-3.5 py-2.5 text-[14px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-tint"
                   />
+
+                  {/* FCRA permissible-purpose attestation */}
+                  <button
+                    type="button"
+                    onClick={() => setAttested((v) => !v)}
+                    className="mt-3 flex w-full items-start gap-2.5 text-left"
+                    aria-pressed={attested}
+                  >
+                    <span
+                      className={
+                        "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-[1.5px] transition-colors " +
+                        (attested ? "border-brand bg-brand text-white" : "border-line-strong bg-surface-2 text-transparent")
+                      }
+                    >
+                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                    </span>
+                    <span className="text-[12px] leading-snug text-ink-soft">{c.attest}</span>
+                  </button>
+
                   <Button
                     full
                     className="mt-3"
-                    disabled={busy}
+                    disabled={busy || !attested}
                     onClick={handleRequest}
                     icon={busy ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Send className="h-[18px] w-[18px]" />}
                   >

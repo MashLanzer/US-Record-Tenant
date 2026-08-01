@@ -62,6 +62,7 @@ const copy = {
     hasEvidence: "Evidence attached",
     reassure: "Facts stay on record, but a dispute marks them as contested and shows both sides. Nothing is a verdict — it's a transparent account.",
     err: "Could not submit. Please try again.",
+    reinvestigation: "Reinvestigation due by",
     markResolved: "Mark as resolved",
     resolving: "Resolving…",
     resolveNote: "You recorded this fact. Resolving closes the dispute as settled.",
@@ -104,6 +105,7 @@ const copy = {
     hasEvidence: "Evidencia adjunta",
     reassure: "Los hechos permanecen en el historial, pero una disputa los marca como controvertidos y muestra ambas versiones. Nada es un veredicto — es un relato transparente.",
     err: "No se pudo enviar. Inténtalo de nuevo.",
+    reinvestigation: "Reinvestigación antes del",
     markResolved: "Marcar como resuelto",
     resolving: "Resolviendo…",
     resolveNote: "Tú registraste este hecho. Resolver cierra la disputa como saldada.",
@@ -303,6 +305,14 @@ function DisputeCard({
             <p className="rounded-xl bg-surface-2 px-3.5 py-3 text-[13px] leading-snug text-ink-soft">
               {cs.description}
             </p>
+          )}
+
+          {isDisputed && cs.reinvestigationDue && (
+            <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-amber-tint px-3 py-2 text-[12px] font-semibold text-amber">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              {c.reinvestigation}{" "}
+              {new Date(cs.reinvestigationDue).toLocaleDateString(locale === "es" ? "es" : "en", { dateStyle: "long" })}
+            </div>
           )}
 
           {/* Dispute thread */}

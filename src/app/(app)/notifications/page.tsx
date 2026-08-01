@@ -12,6 +12,7 @@ import {
   Scale,
   Star,
   UserCheck,
+  Gavel,
   type LucideIcon,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
@@ -55,6 +56,7 @@ const TYPE_ICON: Record<string, LucideIcon> = {
   access_requested: UserCheck,
   access_approved: ShieldCheck,
   access_declined: ShieldCheck,
+  adverse_action: Gavel,
 };
 
 // Notifications that route somewhere when tapped.
@@ -64,6 +66,7 @@ const TYPE_LINK: Record<string, string> = {
   dispute_updated: "/appeals",
   message: "/messages",
   access_requested: "/home",
+  adverse_action: "/notices",
 };
 
 const TONE_CLS: Record<"verify" | "brand" | "amber" | "danger", string> = {
