@@ -491,6 +491,18 @@ export function describeNotification(
         desc: d.overall ? `${d.overall}★` : "",
         tone: "verify",
       };
+    case "report_disputed":
+      return {
+        title: es ? "Un hecho fue disputado" : "A fact was disputed",
+        desc: es ? "La otra parte respondió con su versión." : "The other party responded with their side.",
+        tone: "amber",
+      };
+    case "dispute_updated":
+      return {
+        title: es ? "Nueva respuesta en la disputa" : "New response in the dispute",
+        desc: es ? "Se agregó una declaración o evidencia." : "A statement or evidence was added.",
+        tone: "amber",
+      };
     case "evidence_added":
     case "document_added":
       return {
@@ -787,6 +799,111 @@ export async function fetchReportsAboutMe(userId: string): Promise<ReportItem[]>
     direction: "about_me" as const,
     timeLabel: shortDate((r.created_at as string) ?? ""),
   }));
+}
+
+/* --------------------------------------------------------- disputes / appeals */
+export type DisputeEntry = {
+  id: string;
+  mine: boolean;
+  statement: string | null;
+  evidencePath: string | null;
+  timeLabel: string;
+};
+
+export type DisputeCase = {
+  reportId: string;
+  leaseId: string;
+  type: ReportType;
+  description: string | null;
+  status: "open" | "disputed" | "resolved";
+  direction: "about_me" | "by_me";
+  address: string;
+  timeLabel: string;
+  entries: DisputeEntry[];
+};
+
+/** Every fact the user is part of (either side), with its dispute thread. */
+export async function fetchDisputeCases(userId: string): Promise<DisputeCase[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("reports")
+    .select("id, lease_id, type, description, status, author_id, subject_id, created_at, leases(address)")
+    .or(`author_id.eq.${userId},subject_id.eq.${userId}`)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+
+  const reportIds = data.map((r: Record<string, unknown>) => r.id as string);
+  const entriesByReport = new Map<string, DisputeEntry[]>();
+  if (reportIds.length > 0) {
+    const { data: ents } = await sb
+      .from("dispute_entries")
+      .select("id, report_id, author_id, statement, evidence_path, created_at")
+      .in("report_id", reportIds)
+      .order("created_at", { ascending: true });
+    for (const e of (ents ?? []) as Record<string, unknown>[]) {
+      const key = e.report_id as string;
+      const arr = entriesByReport.get(key) ?? [];
+      arr.push({
+        id: e.id as string,
+        mine: e.author_id === userId,
+        statement: (e.statement as string) ?? null,
+        evidencePath: (e.evidence_path as string) ?? null,
+        timeLabel: shortDate((e.created_at as string) ?? ""),
+      });
+      entriesByReport.set(key, arr);
+    }
+  }
+
+  return data.map((r: Record<string, unknown>) => {
+    const lease = r.leases as { address?: string } | { address?: string }[] | null;
+    const address = Array.isArray(lease) ? lease[0]?.address ?? "" : lease?.address ?? "";
+    return {
+      reportId: r.id as string,
+      leaseId: r.lease_id as string,
+      type: r.type as ReportType,
+      description: (r.description as string) ?? null,
+      status: (r.status as DisputeCase["status"]) ?? "open",
+      direction: r.author_id === userId ? "by_me" : "about_me",
+      address,
+      timeLabel: shortDate((r.created_at as string) ?? ""),
+      entries: entriesByReport.get(r.id as string) ?? [],
+    };
+  });
+}
+
+/** The subject opens a dispute on a fact recorded about them. */
+export async function disputeReport(
+  reportId: string,
+  statement: string,
+  evidencePath: string | null,
+): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("dispute_report", {
+    p_report_id: reportId,
+    p_statement: statement,
+    p_evidence_path: evidencePath,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Either party adds a statement / evidence to an existing dispute. */
+export async function addDisputeEntry(
+  reportId: string,
+  statement: string,
+  evidencePath: string | null,
+): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("add_dispute_entry", {
+    p_report_id: reportId,
+    p_statement: statement,
+    p_evidence_path: evidencePath,
+  });
+  if (error) throw new Error(error.message);
 }
 
 /* --------------------------------------------------------- bilateral ratings */

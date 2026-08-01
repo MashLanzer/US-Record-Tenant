@@ -1,153 +1,105 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ShieldCheck,
   Clock,
-  Check,
-  Upload,
-  MessageSquarePlus,
   Scale,
   ChevronDown,
+  Paperclip,
+  Check,
+  Loader2,
+  Send,
+  Flag,
+  MessageSquareText,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
-import { Button, Card, Chip } from "@/components/ui/primitives";
+import { Button, Card, Chip, Skeleton } from "@/components/ui/primitives";
 import { PageFade } from "@/components/motion";
 import { cn } from "@/lib/cn";
 import { useT, useLocale } from "@/lib/i18n";
-
-type StepState = "done" | "current" | "todo";
+import { useAuth } from "@/lib/auth";
+import {
+  fetchDisputeCases,
+  disputeReport,
+  addDisputeEntry,
+  uploadDocument,
+  reportTypeLabel,
+  type DisputeCase,
+} from "@/lib/data";
 
 const copy = {
   en: {
     title: "Appeals center",
-    subtitle: "A fair path to resolve any disputed fact.",
-    steps: { submitted: "Submitted", review: "Under review", resolution: "Resolution" },
-    resolveWindow: "Resolution within 30 days",
-    inReview: "In review",
+    subtitle: "A fair path to respond to any fact on your record. State your side with evidence — both parties are heard.",
+    empty: "No facts to respond to yet. When someone records a fact about you, it shows up here so you can add your side.",
+    reportedByThem: "About you",
+    reportedByYou: "By you",
+    open: "On record",
+    disputed: "Disputed",
     resolved: "Resolved",
-    addEvidence: "Add evidence",
-    addStatement: "Add my statement",
-    reassure: "Both parties can add evidence and be heard before anything is decided.",
+    disputeThis: "Dispute this fact",
+    yourSide: "Your side of the story",
+    statementPh: "Explain what actually happened — dates, amounts, context.",
+    attach: "Attach evidence",
+    attached: "Evidence attached",
+    optional: "optional",
+    submit: "Submit dispute",
+    submitting: "Submitting…",
+    addStatement: "Add a statement",
+    addPh: "Add more context or respond to the other party…",
+    send: "Add to dispute",
+    sending: "Adding…",
+    thread: "Dispute thread",
+    you: "You",
+    them: "Other party",
+    hasEvidence: "Evidence attached",
+    reassure: "Facts stay on record, but a dispute marks them as contested and shows both sides. Nothing is a verdict — it's a transparent account.",
+    err: "Could not submit. Please try again.",
   },
   es: {
     title: "Centro de apelaciones",
-    subtitle: "Un camino justo para resolver cualquier hecho en disputa.",
-    steps: { submitted: "Enviado", review: "En revisión", resolution: "Resolución" },
-    resolveWindow: "Resolución en un plazo de 30 días",
-    inReview: "En revisión",
+    subtitle: "Un camino justo para responder a cualquier hecho en tu historial. Da tu versión con evidencia — ambas partes son escuchadas.",
+    empty: "Aún no hay hechos que responder. Cuando alguien registre un hecho sobre ti, aparecerá aquí para que agregues tu versión.",
+    reportedByThem: "Sobre ti",
+    reportedByYou: "Por ti",
+    open: "En historial",
+    disputed: "En disputa",
     resolved: "Resuelto",
-    addEvidence: "Agregar evidencia",
-    addStatement: "Agregar mi declaración",
-    reassure: "Ambas partes pueden aportar evidencia y ser escuchadas antes de decidir.",
+    disputeThis: "Disputar este hecho",
+    yourSide: "Tu versión de los hechos",
+    statementPh: "Explica qué pasó realmente — fechas, montos, contexto.",
+    attach: "Adjuntar evidencia",
+    attached: "Evidencia adjunta",
+    optional: "opcional",
+    submit: "Enviar disputa",
+    submitting: "Enviando…",
+    addStatement: "Agregar una declaración",
+    addPh: "Agrega más contexto o responde a la otra parte…",
+    send: "Agregar a la disputa",
+    sending: "Agregando…",
+    thread: "Hilo de la disputa",
+    you: "Tú",
+    them: "La otra parte",
+    hasEvidence: "Evidencia adjunta",
+    reassure: "Los hechos permanecen en el historial, pero una disputa los marca como controvertidos y muestra ambas versiones. Nada es un veredicto — es un relato transparente.",
+    err: "No se pudo enviar. Inténtalo de nuevo.",
   },
 };
-
-type DisputeCase = {
-  id: string;
-  titleEn: string;
-  titleEs: string;
-  refEn: string;
-  refEs: string;
-  status: "review" | "resolved";
-  step: 0 | 1 | 2;
-};
-
-const cases: DisputeCase[] = [
-  {
-    id: "d1",
-    titleEn: "Late payment · September",
-    titleEs: "Pago tardío · septiembre",
-    refEn: "742 Ocean Ave · reported by David C.",
-    refEs: "742 Ocean Ave · reportado por David C.",
-    status: "review",
-    step: 1,
-  },
-  {
-    id: "d2",
-    titleEn: "Deposit deduction",
-    titleEs: "Deducción de depósito",
-    refEn: "18 Maple Street · reported by you",
-    refEs: "18 Maple Street · reportado por ti",
-    status: "resolved",
-    step: 2,
-  },
-];
-
-function Stepper({
-  current,
-  labels,
-}: {
-  current: number;
-  labels: [string, string, string];
-}) {
-  const states: StepState[] = labels.map((_, i) =>
-    i < current ? "done" : i === current ? "current" : "todo",
-  );
-  return (
-    <div className="flex items-start">
-      {labels.map((label, i) => {
-        const state = states[i];
-        return (
-          <div key={label} className="flex flex-1 flex-col items-center">
-            <div className="flex w-full items-center">
-              {/* left connector */}
-              <span
-                className={cn(
-                  "h-[2px] flex-1 rounded-full",
-                  i === 0 ? "opacity-0" : states[i - 1] === "todo" ? "bg-line-strong" : "bg-verify",
-                )}
-              />
-              <span
-                className={cn(
-                  "grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 text-[13px] font-bold transition-colors",
-                  state === "done" && "border-verify bg-verify text-white",
-                  state === "current" && "border-brand bg-brand-tint text-brand",
-                  state === "todo" && "border-line-strong bg-surface text-ink-faint",
-                )}
-              >
-                {state === "done" ? (
-                  <Check className="h-4 w-4" strokeWidth={3} />
-                ) : state === "current" ? (
-                  <Clock className="h-4 w-4" />
-                ) : (
-                  i + 1
-                )}
-              </span>
-              {/* right connector */}
-              <span
-                className={cn(
-                  "h-[2px] flex-1 rounded-full",
-                  i === labels.length - 1 ? "opacity-0" : state === "done" ? "bg-verify" : "bg-line-strong",
-                )}
-              />
-            </div>
-            <span
-              className={cn(
-                "mt-1.5 text-center text-[11.5px] font-semibold leading-tight",
-                state === "current" ? "text-brand" : state === "done" ? "text-ink-soft" : "text-ink-faint",
-              )}
-            >
-              {label}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function AppealsScreen() {
   const c = useT(copy);
   const { locale } = useLocale();
-  const [open, setOpen] = useState<string | null>("d1");
+  const { user } = useAuth();
 
-  const stepLabels: [string, string, string] = [
-    c.steps.submitted,
-    c.steps.review,
-    c.steps.resolution,
-  ];
+  const [cases, setCases] = useState<DisputeCase[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+
+  const load = () => {
+    if (user) fetchDisputeCases(user.id).then(setCases);
+  };
+  useEffect(load, [user]);
 
   return (
     <>
@@ -156,83 +108,235 @@ export default function AppealsScreen() {
         <Screen>
           <p className="text-[14px] leading-snug text-ink-soft">{c.subtitle}</p>
 
-          <div className="mt-4 space-y-3">
-            {cases.map((cs) => {
-              const isOpen = open === cs.id;
-              const resolved = cs.status === "resolved";
-              return (
-                <Card key={cs.id} className="overflow-hidden p-0">
-                  <button
-                    onClick={() => setOpen(isOpen ? null : cs.id)}
-                    className="flex w-full items-center gap-3 p-4 text-left"
-                  >
-                    <span
-                      className={cn(
-                        "grid h-10 w-10 shrink-0 place-items-center rounded-xl",
-                        resolved ? "bg-verify-tint text-verify" : "bg-amber-tint text-amber",
-                      )}
-                    >
-                      <Scale className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[15px] font-bold text-ink">
-                        {locale === "es" ? cs.titleEs : cs.titleEn}
-                      </div>
-                      <div className="truncate text-[12.5px] text-ink-faint">
-                        {locale === "es" ? cs.refEs : cs.refEn}
-                      </div>
-                    </div>
-                    {resolved ? (
-                      <Chip tone="verify" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
-                        {c.resolved}
-                      </Chip>
-                    ) : (
-                      <Chip tone="pending" icon={<Clock className="h-3.5 w-3.5" />}>
-                        {c.inReview}
-                      </Chip>
-                    )}
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 shrink-0 text-ink-faint transition-transform",
-                        isOpen && "rotate-180",
-                      )}
-                    />
-                  </button>
+          {cases === null ? (
+            <div className="mt-4 space-y-3">
+              <Skeleton className="h-20 w-full rounded-2xl" />
+              <Skeleton className="h-20 w-full rounded-2xl" />
+            </div>
+          ) : cases.length === 0 ? (
+            <Card className="mt-4 flex flex-col items-center gap-3 p-8 text-center">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-tint text-brand">
+                <Scale className="h-6 w-6" />
+              </span>
+              <p className="text-[13.5px] leading-snug text-ink-soft">{c.empty}</p>
+            </Card>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {cases.map((cs) => (
+                <DisputeCard
+                  key={cs.reportId}
+                  cs={cs}
+                  c={c}
+                  locale={locale}
+                  userId={user?.id ?? ""}
+                  isOpen={open === cs.reportId}
+                  onToggle={() => setOpen(open === cs.reportId ? null : cs.reportId)}
+                  onChanged={load}
+                />
+              ))}
+            </div>
+          )}
 
-                  {isOpen && (
-                    <div className="border-t border-line px-4 pb-4 pt-5">
-                      <Stepper current={cs.step} labels={stepLabels} />
-
-                      {!resolved && (
-                        <div className="mt-4 flex items-center justify-center gap-1.5 rounded-xl bg-amber-tint px-3 py-2 text-[12.5px] font-semibold text-amber">
-                          <Clock className="h-3.5 w-3.5" />
-                          {c.resolveWindow}
-                        </div>
-                      )}
-
-                      <div className="mt-4 grid grid-cols-2 gap-2.5">
-                        <Button variant="secondary" icon={<Upload className="h-[17px] w-[17px]" />}>
-                          {c.addEvidence}
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          icon={<MessageSquarePlus className="h-[17px] w-[17px]" />}
-                        >
-                          {c.addStatement}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-
-          <p className="mt-5 text-center text-[12.5px] leading-snug text-ink-faint">
-            {c.reassure}
-          </p>
+          <p className="mt-5 text-center text-[12.5px] leading-snug text-ink-faint">{c.reassure}</p>
         </Screen>
       </PageFade>
     </>
+  );
+}
+
+function DisputeCard({
+  cs,
+  c,
+  locale,
+  userId,
+  isOpen,
+  onToggle,
+  onChanged,
+}: {
+  cs: DisputeCase;
+  c: (typeof copy)["en"];
+  locale: "en" | "es";
+  userId: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  onChanged: () => void;
+}) {
+  const [statement, setStatement] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const isSubject = cs.direction === "about_me";
+  const isDisputed = cs.status === "disputed";
+  const isResolved = cs.status === "resolved";
+  // The subject can open a dispute; both parties can add to an ongoing one.
+  const canDispute = isSubject && cs.status === "open";
+  const canAdd = isDisputed;
+
+  async function handleSubmit(kind: "open" | "add") {
+    if (busy || (!statement.trim() && !file)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      let evidencePath: string | null = null;
+      if (file && userId) evidencePath = await uploadDocument(userId, file, "evidence", cs.leaseId);
+      if (kind === "open") await disputeReport(cs.reportId, statement.trim(), evidencePath);
+      else await addDisputeEntry(cs.reportId, statement.trim(), evidencePath);
+      setStatement("");
+      setFile(null);
+      onChanged();
+    } catch {
+      setError(c.err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const statusChip = isResolved ? (
+    <Chip tone="verify" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
+      {c.resolved}
+    </Chip>
+  ) : isDisputed ? (
+    <Chip tone="dispute" icon={<Scale className="h-3.5 w-3.5" />}>
+      {c.disputed}
+    </Chip>
+  ) : (
+    <Chip tone="neutral" icon={<Clock className="h-3.5 w-3.5" />}>
+      {c.open}
+    </Chip>
+  );
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <button onClick={onToggle} className="flex w-full items-center gap-3 p-4 text-left">
+        <span
+          className={cn(
+            "grid h-10 w-10 shrink-0 place-items-center rounded-xl",
+            isResolved ? "bg-verify-tint text-verify" : isDisputed ? "bg-danger-tint text-danger" : "bg-brand-tint text-brand",
+          )}
+        >
+          <Flag className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[15px] font-bold text-ink">{reportTypeLabel(cs.type, locale)}</div>
+          <div className="truncate text-[12.5px] text-ink-faint">
+            {cs.address} · {isSubject ? c.reportedByThem : c.reportedByYou}
+          </div>
+        </div>
+        {statusChip}
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-ink-faint transition-transform", isOpen && "rotate-180")} />
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-line px-4 pb-4 pt-4">
+          {cs.description && (
+            <p className="rounded-xl bg-surface-2 px-3.5 py-3 text-[13px] leading-snug text-ink-soft">
+              {cs.description}
+            </p>
+          )}
+
+          {/* Dispute thread */}
+          {cs.entries.length > 0 && (
+            <>
+              <div className="mb-2 mt-4 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wider text-ink-faint">
+                <MessageSquareText className="h-3.5 w-3.5" /> {c.thread}
+              </div>
+              <div className="space-y-2">
+                {cs.entries.map((e) => (
+                  <div
+                    key={e.id}
+                    className={cn(
+                      "rounded-xl px-3.5 py-2.5",
+                      e.mine ? "bg-brand-tint" : "bg-surface-2",
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={cn("text-[12px] font-bold", e.mine ? "text-brand" : "text-ink-soft")}>
+                        {e.mine ? c.you : c.them}
+                      </span>
+                      <span className="text-[11px] text-ink-faint">{e.timeLabel}</span>
+                    </div>
+                    {e.statement && <p className="mt-1 text-[13px] leading-snug text-ink">{e.statement}</p>}
+                    {e.evidencePath && (
+                      <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-verify">
+                        <Paperclip className="h-3.5 w-3.5" /> {c.hasEvidence}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Compose: open a dispute (subject, still open) or add to it (disputed) */}
+          {(canDispute || canAdd) && (
+            <div className="mt-4">
+              <div className="mb-1.5 text-[13px] font-semibold text-ink-soft">
+                {canDispute ? c.yourSide : c.addStatement}
+              </div>
+              <textarea
+                value={statement}
+                onChange={(e) => setStatement(e.target.value)}
+                placeholder={canDispute ? c.statementPh : c.addPh}
+                rows={3}
+                className="w-full resize-none rounded-xl border-[1.5px] border-line-strong bg-surface-2 px-3.5 py-2.5 text-[14px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-tint"
+              />
+
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+              {file ? (
+                <div className="mt-2 flex items-center gap-2.5 rounded-xl bg-verify-tint px-3.5 py-2.5 text-[13px] font-semibold text-verify">
+                  <Check className="h-4 w-4 shrink-0" strokeWidth={3} />
+                  <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                  <button className="text-verify/70 underline" onClick={() => setFile(null)}>
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface-2 px-4 py-2.5 text-[12.5px] font-semibold text-ink-soft"
+                >
+                  <Paperclip className="h-4 w-4" />
+                  {c.attach} · {c.optional}
+                </button>
+              )}
+
+              {error && <p className="mt-2 text-[13px] font-medium text-danger">{error}</p>}
+
+              <Button
+                full
+                className="mt-3"
+                disabled={busy || (!statement.trim() && !file)}
+                onClick={() => handleSubmit(canDispute ? "open" : "add")}
+                icon={
+                  busy ? (
+                    <Loader2 className="h-[18px] w-[18px] animate-spin" />
+                  ) : canDispute ? (
+                    <Scale className="h-[18px] w-[18px]" />
+                  ) : (
+                    <Send className="h-[18px] w-[18px]" />
+                  )
+                }
+              >
+                {busy
+                  ? canDispute
+                    ? c.submitting
+                    : c.sending
+                  : canDispute
+                    ? c.submit
+                    : c.send}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }

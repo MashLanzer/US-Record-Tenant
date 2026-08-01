@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Sparkles,
   ShieldCheck,
   CreditCard,
   MessageSquare,
   Bell,
+  Flag,
+  Scale,
+  Star,
   type LucideIcon,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
@@ -48,6 +52,18 @@ const TYPE_ICON: Record<string, LucideIcon> = {
   contract_added: ShieldCheck,
   payment_recorded: CreditCard,
   message: MessageSquare,
+  report_received: Flag,
+  report_disputed: Scale,
+  dispute_updated: Scale,
+  rating_received: Star,
+};
+
+// Notifications that route somewhere when tapped.
+const TYPE_LINK: Record<string, string> = {
+  report_received: "/appeals",
+  report_disputed: "/appeals",
+  dispute_updated: "/appeals",
+  message: "/messages",
 };
 
 const TONE_CLS: Record<"verify" | "brand" | "amber" | "danger", string> = {
@@ -129,8 +145,17 @@ export default function NotificationsScreen() {
                   const { title, desc, tone } = describeNotification(n, locale);
                   const Icon = TYPE_ICON[n.type] ?? Bell;
                   const unread = !n.read;
+                  const href = TYPE_LINK[n.type];
+                  const Wrapper = href
+                    ? ({ children }: { children: React.ReactNode }) => (
+                        <Link href={href} className="block">
+                          {children}
+                        </Link>
+                      )
+                    : ({ children }: { children: React.ReactNode }) => <>{children}</>;
                   return (
                     <StaggerItem key={n.id}>
+                      <Wrapper>
                       <div
                         className={cn(
                           "flex w-full items-center gap-3 rounded-xl p-2.5 text-left",
@@ -163,6 +188,7 @@ export default function NotificationsScreen() {
                           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-brand-600" />
                         )}
                       </div>
+                      </Wrapper>
                     </StaggerItem>
                   );
                 })}
