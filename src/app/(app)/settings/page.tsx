@@ -19,6 +19,7 @@ import {
   Scale,
   AlertTriangle,
   Loader2,
+  Clock,
 } from "lucide-react";
 import { useState } from "react";
 import { AppHeader, SectionTitle } from "@/components/app-header";
@@ -67,6 +68,8 @@ const copy = {
     fcraSub: "How you may use this app",
     consents: "My consents",
     consentsSub: "Agreements you've accepted",
+    retention: "Data retention",
+    retentionSub: "How long we keep your data",
     deleteAccount: "Delete my account",
     deleteSub: "Permanently erase your data",
     delTitle: "Delete your account?",
@@ -107,6 +110,8 @@ const copy = {
     fcraSub: "Cómo puedes usar esta app",
     consents: "Mis consentimientos",
     consentsSub: "Acuerdos que has aceptado",
+    retention: "Retención de datos",
+    retentionSub: "Cuánto tiempo guardamos tus datos",
     deleteAccount: "Eliminar mi cuenta",
     deleteSub: "Borra tus datos permanentemente",
     delTitle: "¿Eliminar tu cuenta?",
@@ -245,6 +250,7 @@ export default function SettingsScreen() {
             />
             <ListRow icon={<Scale className="h-5 w-5" />} title={c.fcra} subtitle={c.fcraSub} tone="neutral" right={chevron} href="/legal/fcra" />
             <ListRow icon={<FileText className="h-5 w-5" />} title={c.consents} subtitle={c.consentsSub} tone="neutral" right={chevron} href="/legal/consents" />
+            <ListRow icon={<Clock className="h-5 w-5" />} title={c.retention} subtitle={c.retentionSub} tone="neutral" right={chevron} href="/legal/retention" />
             <ListRow
               icon={<Trash2 className="h-5 w-5" />}
               title={<span className="text-danger">{c.deleteAccount}</span>}
