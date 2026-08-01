@@ -479,6 +479,12 @@ export function describeNotification(
         desc: (d.email as string) ?? "",
         tone: "verify",
       };
+    case "report_received":
+      return {
+        title: es ? "Nuevo hecho en tu historial" : "New fact on your record",
+        desc: es ? "Puedes verlo y responder." : "You can review and respond.",
+        tone: "amber",
+      };
     case "evidence_added":
     case "document_added":
       return {
@@ -642,7 +648,7 @@ export async function uploadDocument(
   file: File,
   kind: "document" | "evidence" | "lease" | "verification" = "document",
   leaseId?: string,
-): Promise<void> {
+): Promise<string> {
   const typed = getSupabase();
   if (!typed) throw new Error("demo-mode");
   const safeName = file.name.replace(/[^\w.\-]+/g, "_");
@@ -658,6 +664,7 @@ export async function uploadDocument(
     .insert({ owner_id: userId, name: file.name, path, kind, lease_id: leaseId ?? null });
   if (error) throw new Error(error.message);
   await notify(userId, kind === "evidence" ? "evidence_added" : "document_added", { name: file.name });
+  return path;
 }
 
 /** A short-lived signed URL to view/download a private document. */
@@ -675,6 +682,105 @@ export async function updateIdentityVerified(userId: string): Promise<void> {
   const db = typed as unknown as SupabaseClient;
   await db.from("profiles").update({ identity_verified: true }).eq("id", userId);
   await notify(userId, "identity_verified", {});
+}
+
+/* ----------------------------------------------------- recorded facts (reports) */
+export type ReportType =
+  | "late_payment"
+  | "good_payment"
+  | "damage"
+  | "clean"
+  | "contract_violation"
+  | "good_communication"
+  | "other";
+
+export type ReportItem = {
+  id: string;
+  leaseId: string;
+  type: ReportType;
+  description: string | null;
+  evidencePath: string | null;
+  status: "open" | "disputed" | "resolved";
+  direction: "about_me" | "by_me";
+  timeLabel: string;
+};
+
+export const REPORT_TYPES: { key: ReportType; en: string; es: string; positive: boolean }[] = [
+  { key: "good_payment", en: "Paid on time", es: "Pagó a tiempo", positive: true },
+  { key: "late_payment", en: "Late payment", es: "Pago tardío", positive: false },
+  { key: "clean", en: "Left it clean", es: "Entregó limpio", positive: true },
+  { key: "damage", en: "Damage", es: "Daño", positive: false },
+  { key: "good_communication", en: "Great communication", es: "Buena comunicación", positive: true },
+  { key: "contract_violation", en: "Contract violation", es: "Violó el contrato", positive: false },
+  { key: "other", en: "Other", es: "Otro", positive: true },
+];
+
+export function reportTypeLabel(type: ReportType, locale: Locale): string {
+  const t = REPORT_TYPES.find((x) => x.key === type);
+  return t ? (locale === "es" ? t.es : t.en) : type;
+}
+
+/** Record a fact about the lease counterparty (subject is derived server-side). */
+export async function submitReport(
+  leaseId: string,
+  type: ReportType,
+  description: string,
+  evidencePath: string | null,
+): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("submit_report", {
+    p_lease_id: leaseId,
+    p_type: type,
+    p_description: description,
+    p_evidence_path: evidencePath,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** All facts recorded on a lease (both parties can see them). */
+export async function fetchReportsForLease(leaseId: string, userId: string): Promise<ReportItem[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("reports")
+    .select("id, lease_id, type, description, evidence_path, status, author_id, created_at")
+    .eq("lease_id", leaseId)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    leaseId: r.lease_id as string,
+    type: r.type as ReportType,
+    description: (r.description as string) ?? null,
+    evidencePath: (r.evidence_path as string) ?? null,
+    status: (r.status as ReportItem["status"]) ?? "open",
+    direction: r.author_id === userId ? "by_me" : "about_me",
+    timeLabel: shortDate((r.created_at as string) ?? ""),
+  }));
+}
+
+/** Facts recorded ABOUT the current user (for the dossier / appeals). */
+export async function fetchReportsAboutMe(userId: string): Promise<ReportItem[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("reports")
+    .select("id, lease_id, type, description, evidence_path, status, author_id, created_at")
+    .eq("subject_id", userId)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    leaseId: r.lease_id as string,
+    type: r.type as ReportType,
+    description: (r.description as string) ?? null,
+    evidencePath: (r.evidence_path as string) ?? null,
+    status: (r.status as ReportItem["status"]) ?? "open",
+    direction: "about_me" as const,
+    timeLabel: shortDate((r.created_at as string) ?? ""),
+  }));
 }
 
 /* ------------------------------------------------ lease invitations (bilateral) */

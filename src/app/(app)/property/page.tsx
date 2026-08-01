@@ -30,9 +30,12 @@ import {
   formatMonthYear,
   inviteToLease,
   fetchLeaseInvites,
+  fetchReportsForLease,
+  reportTypeLabel,
   type Rental,
   type PaymentItem,
   type Invitation,
+  type ReportItem,
 } from "@/lib/data";
 
 const copy = {
@@ -73,6 +76,12 @@ const copy = {
     inviteSent: "Invite sent.",
     inviteErr: "Could not send. Check the email and try again.",
     tenantLinked: "Tenant confirmed · lease verified",
+    facts: "Facts on record",
+    byYou: "By you",
+    aboutYou: "About you",
+    stOpen: "Open",
+    stDisputed: "Disputed",
+    stResolved: "Resolved",
   },
   es: {
     map: "Mapa",
@@ -111,6 +120,12 @@ const copy = {
     inviteSent: "Invitación enviada.",
     inviteErr: "No se pudo enviar. Revisa el correo e inténtalo de nuevo.",
     tenantLinked: "Inquilino confirmado · contrato verificado",
+    facts: "Hechos en el historial",
+    byYou: "Por ti",
+    aboutYou: "Sobre ti",
+    stOpen: "Abierto",
+    stDisputed: "En disputa",
+    stResolved: "Resuelto",
   },
 };
 
@@ -133,6 +148,7 @@ export default function PropertyScreen() {
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
   const [invites, setInvites] = useState<Invitation[]>([]);
+  const [reports, setReports] = useState<ReportItem[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -151,6 +167,11 @@ export default function PropertyScreen() {
       fetchLeaseInvites(rental.id).then(setInvites);
     }
   }, [rental]);
+
+  // Load recorded facts for this lease.
+  useEffect(() => {
+    if (rental && user) fetchReportsForLease(rental.id, user.id).then(setReports);
+  }, [rental, user]);
 
   async function handleInvite() {
     if (!rental || !user || inviting || !inviteEmail.trim()) return;
@@ -432,12 +453,49 @@ export default function PropertyScreen() {
             </Button>
           )}
 
+          {/* Facts on record */}
+          {reports.length > 0 && (
+            <>
+              <div className="mb-2.5 mt-6 text-[13px] font-bold uppercase tracking-wider text-ink-faint">
+                {c.facts}
+              </div>
+              <Card className="divide-y divide-line p-0">
+                {reports.map((r) => (
+                  <div key={r.id} className="p-3.5">
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 text-[14px] font-semibold text-ink">
+                        {reportTypeLabel(r.type, locale)}
+                      </span>
+                      <Chip tone={r.direction === "by_me" ? "brand" : "pending"}>
+                        {r.direction === "by_me" ? c.byYou : c.aboutYou}
+                      </Chip>
+                      <Chip tone={r.status === "resolved" ? "verify" : r.status === "disputed" ? "dispute" : "neutral"}>
+                        {r.status === "resolved" ? c.stResolved : r.status === "disputed" ? c.stDisputed : c.stOpen}
+                      </Chip>
+                    </div>
+                    {r.description && (
+                      <p className="mt-1 text-[13px] leading-snug text-ink-soft">{r.description}</p>
+                    )}
+                    <div className="mt-1 text-[11px] text-ink-faint">{r.timeLabel}</div>
+                  </div>
+                ))}
+              </Card>
+            </>
+          )}
+
           {/* Report */}
-          <div className="mt-6">
-            <Button href="/report" variant="ghost" full icon={<Flag className="h-[18px] w-[18px]" />}>
-              {c.report}
-            </Button>
-          </div>
+          {(rental.relation === "tenant" || rental.tenantId) && (
+            <div className="mt-6">
+              <Button
+                href={`/report?lease=${rental.id}`}
+                variant="ghost"
+                full
+                icon={<Flag className="h-[18px] w-[18px]" />}
+              >
+                {c.report}
+              </Button>
+            </div>
+          )}
         </Screen>
       </PageFade>
     </>
