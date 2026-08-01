@@ -65,6 +65,8 @@ const copy = {
     exporting: "Preparing…",
     fcra: "FCRA notice",
     fcraSub: "How you may use this app",
+    consents: "My consents",
+    consentsSub: "Agreements you've accepted",
     deleteAccount: "Delete my account",
     deleteSub: "Permanently erase your data",
     delTitle: "Delete your account?",
@@ -103,6 +105,8 @@ const copy = {
     exporting: "Preparando…",
     fcra: "Aviso FCRA",
     fcraSub: "Cómo puedes usar esta app",
+    consents: "Mis consentimientos",
+    consentsSub: "Acuerdos que has aceptado",
     deleteAccount: "Eliminar mi cuenta",
     deleteSub: "Borra tus datos permanentemente",
     delTitle: "¿Eliminar tu cuenta?",
@@ -240,6 +244,7 @@ export default function SettingsScreen() {
               onClick={handleExport}
             />
             <ListRow icon={<Scale className="h-5 w-5" />} title={c.fcra} subtitle={c.fcraSub} tone="neutral" right={chevron} href="/legal/fcra" />
+            <ListRow icon={<FileText className="h-5 w-5" />} title={c.consents} subtitle={c.consentsSub} tone="neutral" right={chevron} href="/legal/consents" />
             <ListRow
               icon={<Trash2 className="h-5 w-5" />}
               title={<span className="text-danger">{c.deleteAccount}</span>}

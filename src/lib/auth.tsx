@@ -66,7 +66,13 @@ type AuthContextValue = {
   demoMode: boolean;
   user: AuthUser | null;
   profile: Profile | null;
-  signUp: (email: string, password: string, role: Role, fullName?: string) => Promise<AuthResult>;
+  signUp: (
+    email: string,
+    password: string,
+    role: Role,
+    fullName?: string,
+    extra?: { dob?: string; jurisdiction?: string },
+  ) => Promise<AuthResult>;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signInWithOAuth: (provider: "google" | "apple") => Promise<AuthResult>;
   resetPassword: (email: string) => Promise<AuthResult>;
@@ -84,6 +90,8 @@ const DEMO_PROFILE: Profile = {
   avatar_initials: me.initials,
   phone: null,
   bio: null,
+  date_of_birth: null,
+  jurisdiction: null,
   trust_score: me.trustScore,
   identity_verified: true,
   created_at: new Date(0).toISOString(),
@@ -166,14 +174,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, loadProfile]);
 
   const signUp = useCallback<AuthContextValue["signUp"]>(
-    async (email, password, role, fullName) => {
+    async (email, password, role, fullName, extra) => {
       const supabase = getSupabase();
       if (!supabase) return { error: null }; // demo mode: pretend success
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { role, full_name: fullName ?? null },
+          data: {
+            role,
+            full_name: fullName ?? null,
+            date_of_birth: extra?.dob ?? null,
+            jurisdiction: extra?.jurisdiction ?? null,
+          },
           emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/home/` : undefined,
         },
       });

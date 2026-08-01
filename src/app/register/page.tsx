@@ -9,6 +9,7 @@ import { useT } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/lib/auth";
+import { MIN_AGE, ageFromDob, US_JURISDICTIONS } from "@/lib/legal";
 
 type Role = "tenant" | "landlord";
 
@@ -24,12 +25,19 @@ const copy = {
     password: "Password",
     passwordPh: "Create a password",
     passwordHint: "At least 8 characters.",
+    dob: "Date of birth",
+    dobHint: "You must be at least 18 to use Tenant Trust.",
+    state: "State / jurisdiction",
+    statePh: "Select your state",
     google: "Continue with Google",
     or: "or",
-    agree: "I agree to the Terms & Privacy Policy.",
+    agree:
+      "I confirm I am 18 or older and the information I provide is truthful, and I agree to the Terms of Service, Privacy Policy and FCRA Notice.",
     create: "Create account",
     creating: "Creating account…",
     genericErr: "Could not create your account. Please try again.",
+    under18: "You must be at least 18 years old to register.",
+    needState: "Please select your state.",
   },
   es: {
     title: "Crea tu cuenta",
@@ -42,12 +50,19 @@ const copy = {
     password: "Contraseña",
     passwordPh: "Crea una contraseña",
     passwordHint: "Al menos 8 caracteres.",
+    dob: "Fecha de nacimiento",
+    dobHint: "Debes tener al menos 18 años para usar Tenant Trust.",
+    state: "Estado / jurisdicción",
+    statePh: "Selecciona tu estado",
     google: "Continuar con Google",
     or: "o",
-    agree: "Acepto los Términos y la Política de Privacidad.",
+    agree:
+      "Confirmo que tengo 18 años o más y que la información que proporciono es veraz, y acepto los Términos del Servicio, la Política de Privacidad y el Aviso FCRA.",
     create: "Crear cuenta",
     creating: "Creando cuenta…",
     genericErr: "No pudimos crear tu cuenta. Inténtalo de nuevo.",
+    under18: "Debes tener al menos 18 años para registrarte.",
+    needState: "Selecciona tu estado.",
   },
 };
 
@@ -68,9 +83,14 @@ export default function RegisterScreen() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [dob, setDob] = useState("");
+  const [jurisdiction, setJurisdiction] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const age = dob ? ageFromDob(dob, new Date()) : NaN;
+  const isAdult = !isNaN(age) && age >= MIN_AGE;
 
   const roleOptions: { value: Role; label: string }[] = [
     { value: "tenant", label: g.roles.tenant },
@@ -79,9 +99,20 @@ export default function RegisterScreen() {
 
   async function handleCreate() {
     if (!agreed || submitting) return;
+    if (!dob || !isAdult) {
+      setError(c.under18);
+      return;
+    }
+    if (!jurisdiction) {
+      setError(c.needState);
+      return;
+    }
     setSubmitting(true);
     setError(null);
-    const { error } = await signUp(email, password, role, fullName.trim() || undefined);
+    const { error } = await signUp(email, password, role, fullName.trim() || undefined, {
+      dob,
+      jurisdiction,
+    });
     if (error) {
       setError(error);
       setSubmitting(false);
@@ -147,6 +178,23 @@ export default function RegisterScreen() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
+          <Field label={c.dob} hint={c.dobHint}>
+            <Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+          </Field>
+          <Field label={c.state}>
+            <select
+              value={jurisdiction}
+              onChange={(e) => setJurisdiction(e.target.value)}
+              className="w-full rounded-xl border-[1.5px] border-line-strong bg-surface-2 px-3.5 py-3 text-[15px] text-ink focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-tint"
+            >
+              <option value="">{c.statePh}</option>
+              {US_JURISDICTIONS.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
         </form>
       </div>
 
@@ -190,7 +238,7 @@ export default function RegisterScreen() {
         type="button"
         size="lg"
         full
-        disabled={!agreed || submitting}
+        disabled={!agreed || submitting || !dob || !isAdult || !jurisdiction}
         onClick={handleCreate}
         className="mt-6"
       >

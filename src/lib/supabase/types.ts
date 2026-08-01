@@ -12,6 +12,8 @@ export interface Profile {
   avatar_initials: string | null;
   phone: string | null;
   bio: string | null;
+  date_of_birth: string | null;
+  jurisdiction: string | null;
   trust_score: number;
   identity_verified: boolean;
   created_at: string;

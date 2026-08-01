@@ -1566,3 +1566,51 @@ export async function deleteAccount(): Promise<void> {
   const { error } = await db.rpc("delete_account");
   if (error) throw new Error(error.message);
 }
+
+/* ---------------------------------------------------- legal consent (Fase 7.1) */
+export type ConsentRecord = { document: string; version: string; acceptedAt: string };
+
+/** The user's full consent history (immutable audit trail). */
+export async function fetchMyConsents(userId: string): Promise<ConsentRecord[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data } = await sb
+    .from("consents")
+    .select("document, version, accepted_at")
+    .eq("user_id", userId)
+    .order("accepted_at", { ascending: false });
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    document: r.document as string,
+    version: r.version as string,
+    acceptedAt: (r.accepted_at as string) ?? "",
+  }));
+}
+
+/** Record acceptance of one or more documents at their current versions. */
+export async function recordConsents(
+  userId: string,
+  items: { document: string; version: string }[],
+): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) return;
+  const db = typed as unknown as SupabaseClient;
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 300) : null;
+  const rows = items.map((i) => ({ user_id: userId, document: i.document, version: i.version, user_agent: ua }));
+  const { error } = await db.from("consents").insert(rows);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Which required documents the user has NOT yet accepted at the current version.
+ * Empty array → fully consented. Used by the ConsentGate.
+ */
+export async function pendingConsents(
+  userId: string,
+  required: { document: string; version: string }[],
+): Promise<{ document: string; version: string }[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const history = await fetchMyConsents(userId);
+  const accepted = new Set(history.map((h) => `${h.document}@${h.version}`));
+  return required.filter((r) => !accepted.has(`${r.document}@${r.version}`));
+}
