@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Gavel, Check, Loader2, Info } from "lucide-react";
+import Link from "next/link";
+import { Gavel, Check, Loader2, Info, Scale } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
 import { Button, Card, Skeleton } from "@/components/ui/primitives";
 import { PageFade } from "@/components/motion";
-import { useT } from "@/lib/i18n";
+import { useT, useLocale } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { scanProtectedClass } from "@/lib/fair-housing";
 import {
   fetchPublicProfile,
   issueAdverseAction,
@@ -41,6 +43,9 @@ const copy = {
     disclaimer: "This is a template for transparency, not legal advice. Have it reviewed by an attorney before relying on it.",
     needReason: "Select at least one reason.",
     notFound: "Person not found.",
+    fhCertify: "I certify this decision is not based on race, color, national origin, religion, sex, familial status, disability, or any other protected class, and that the same criteria apply to every applicant.",
+    fhLearn: "Fair Housing policy",
+    fhNoteWarn: "Your note may reference a protected class. Please remove it — adverse actions must be about conduct only.",
     // Notice body
     nHeading: "Notice of Adverse Action",
     nP1: "This notice is provided because an adverse action was taken, in whole or in part, based on information obtained through Tenant Trust.",
@@ -74,6 +79,9 @@ const copy = {
     disclaimer: "Esta es una plantilla para transparencia, no asesoría legal. Haz que un abogado la revise antes de usarla.",
     needReason: "Selecciona al menos una razón.",
     notFound: "Persona no encontrada.",
+    fhCertify: "Certifico que esta decisión no se basa en raza, color, origen nacional, religión, sexo, estatus familiar, discapacidad ni ninguna otra clase protegida, y que se aplican los mismos criterios a cada solicitante.",
+    fhLearn: "Política de Vivienda Justa",
+    fhNoteWarn: "Tu nota podría referir a una clase protegida. Elimínala — las acciones adversas deben ser solo sobre conducta.",
     nHeading: "Aviso de Acción Adversa",
     nP1: "Este aviso se entrega porque se tomó una acción adversa, total o parcialmente, con base en información obtenida a través de Tenant Trust.",
     nP2: "Tenant Trust no tomó la decisión de esta acción y no puede dar las razones específicas. Las razones, si las hay, las indica la parte que emitió este aviso.",
@@ -102,6 +110,7 @@ const DECISIONS: { key: AdverseDecision; label: keyof (typeof copy)["en"] }[] = 
 
 export default function AdverseActionScreen() {
   const c = useT(copy);
+  const { locale } = useLocale();
   const router = useRouter();
   const { user } = useAuth();
 
@@ -109,8 +118,11 @@ export default function AdverseActionScreen() {
   const [decision, setDecision] = useState<AdverseDecision>("denied");
   const [reasons, setReasons] = useState<string[]>([]);
   const [note, setNote] = useState("");
+  const [certified, setCertified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const noteScan = useMemo(() => scanProtectedClass(note), [note]);
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("subject") ?? "";
@@ -122,7 +134,7 @@ export default function AdverseActionScreen() {
   }
 
   async function handleSend() {
-    if (!subject || busy) return;
+    if (!subject || busy || !certified || noteScan.flagged) return;
     if (reasons.length === 0) {
       setError(c.needReason);
       return;
@@ -238,6 +250,36 @@ export default function AdverseActionScreen() {
             <p className="text-[12.5px] leading-relaxed text-ink-soft">{c.nR3}</p>
           </Card>
 
+          {/* Fair Housing note warning */}
+          {noteScan.flagged && (
+            <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-danger-tint px-3 py-2 text-[12px] font-medium text-danger">
+              <Scale className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {c.fhNoteWarn}
+            </p>
+          )}
+
+          {/* Fair Housing certification */}
+          <button
+            type="button"
+            onClick={() => setCertified((v) => !v)}
+            className="mt-4 flex w-full items-start gap-2.5 text-left"
+            aria-pressed={certified}
+          >
+            <span
+              className={
+                "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-[1.5px] transition-colors " +
+                (certified ? "border-brand bg-brand text-white" : "border-line-strong bg-surface-2 text-transparent")
+              }
+            >
+              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+            </span>
+            <span className="text-[12px] leading-snug text-ink-soft">
+              {c.fhCertify}{" "}
+              <Link href="/legal/fair-housing" className="font-semibold text-brand underline">
+                {c.fhLearn}
+              </Link>
+            </span>
+          </button>
+
           <p className="mt-3 text-[11px] leading-snug text-ink-faint">{c.disclaimer}</p>
           {error && <p className="mt-2 text-[13px] font-medium text-danger">{error}</p>}
 
@@ -245,7 +287,7 @@ export default function AdverseActionScreen() {
             full
             size="lg"
             className="mt-4"
-            disabled={busy || reasons.length === 0}
+            disabled={busy || reasons.length === 0 || !certified || noteScan.flagged}
             onClick={handleSend}
             icon={busy ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Gavel className="h-[18px] w-[18px]" />}
           >

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ShieldCheck, Scale, FileText, Lock, ChevronRight, Heart } from "lucide-react";
+import { ShieldCheck, Scale, FileText, Lock, ChevronRight, Heart, Home } from "lucide-react";
 import { AppHeader, SectionTitle } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
 import { Card, ListRow } from "@/components/ui/primitives";
@@ -27,8 +27,10 @@ const copy = {
     terms: "Terms of Service",
     privacy: "Privacy Policy",
     fcra: "FCRA notice",
+    fairHousing: "Fair Housing policy",
     version: "Version",
     madeWith: "Made with care for renters and owners alike.",
+    equalHousing: "Equal Housing Opportunity. We do not tolerate discrimination based on any protected class.",
   },
   es: {
     title: "Acerca de",
@@ -46,8 +48,10 @@ const copy = {
     terms: "Términos del servicio",
     privacy: "Política de privacidad",
     fcra: "Aviso FCRA",
+    fairHousing: "Política de Vivienda Justa",
     version: "Versión",
     madeWith: "Hecho con cuidado para inquilinos y propietarios por igual.",
+    equalHousing: "Igualdad de Oportunidad de Vivienda. No toleramos la discriminación por ninguna clase protegida.",
   },
 };
 
@@ -84,7 +88,13 @@ export default function AboutScreen() {
             <ListRow icon={<FileText className="h-5 w-5" />} title={c.terms} right={chevron} href="/legal/terms" />
             <ListRow icon={<Lock className="h-5 w-5" />} title={c.privacy} right={chevron} href="/legal/privacy" />
             <ListRow icon={<Scale className="h-5 w-5" />} title={c.fcra} right={chevron} href="/legal/fcra" />
+            <ListRow icon={<Home className="h-5 w-5" />} title={c.fairHousing} right={chevron} href="/legal/fair-housing" />
           </Card>
+
+          <div className="mt-5 flex items-center gap-2.5 rounded-2xl border border-line bg-surface-2 p-3.5">
+            <Home className="h-5 w-5 shrink-0 text-brand" />
+            <p className="text-[12px] leading-snug text-ink-soft">{c.equalHousing}</p>
+          </div>
 
           <div className="mt-6 flex flex-col items-center gap-1 text-center">
             <span className="text-[12.5px] text-ink-faint">

@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Info, Upload, Check, Loader2, ShieldAlert, Paperclip } from "lucide-react";
+import Link from "next/link";
+import { Info, Upload, Check, Loader2, ShieldAlert, Paperclip, Scale } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
 import { Card, Button, Chip, Skeleton } from "@/components/ui/primitives";
 import { PageFade } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { scanProtectedClass } from "@/lib/fair-housing";
 import {
   fetchRentalById,
   submitReport,
@@ -27,6 +29,12 @@ const copy = {
     describe: "Describe the facts",
     describePh: "e.g. Rent for September arrived on the 6th, five days late.",
     noOpinions: "Stick to what happened — dates, amounts, specifics. No opinions.",
+    fhReminder: "Fair Housing: facts must be about conduct, never a person's race, religion, family, disability or other protected class.",
+    fhWarnTitle: "This may reference a protected class",
+    fhWarnBody: "We noticed wording that could relate to a Fair Housing protected class. Please rewrite this to describe only conduct (payments, damage, contract terms), or confirm below.",
+    fhDetected: "Detected",
+    fhAck: "I confirm this fact describes conduct only, not a protected class.",
+    fhLearn: "Fair Housing policy",
     evidence: "Evidence",
     optional: "optional",
     addEvidence: "Attach a receipt, photo or document",
@@ -45,6 +53,12 @@ const copy = {
     describe: "Describe los hechos",
     describePh: "ej. La renta de septiembre llegó el día 6, cinco días tarde.",
     noOpinions: "Cíñete a lo que pasó — fechas, montos, detalles. Sin opiniones.",
+    fhReminder: "Vivienda Justa: los hechos son sobre conducta, nunca sobre la raza, religión, familia, discapacidad u otra clase protegida de una persona.",
+    fhWarnTitle: "Esto podría referir a una clase protegida",
+    fhWarnBody: "Detectamos lenguaje que podría relacionarse con una clase protegida de Vivienda Justa. Reescríbelo para describir solo conducta (pagos, daños, términos del contrato), o confírmalo abajo.",
+    fhDetected: "Detectado",
+    fhAck: "Confirmo que este hecho describe solo conducta, no una clase protegida.",
+    fhLearn: "Política de Vivienda Justa",
     evidence: "Evidencia",
     optional: "opcional",
     addEvidence: "Adjunta un recibo, foto o documento",
@@ -69,7 +83,10 @@ export default function ReportScreen() {
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fhAck, setFhAck] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const fhScan = useMemo(() => scanProtectedClass(description), [description]);
 
   useEffect(() => {
     if (!user) return;
@@ -82,7 +99,8 @@ export default function ReportScreen() {
   }, [user]);
 
   const hasCounterparty = !!rental && (rental.relation === "tenant" || !!rental.tenantId);
-  const canSubmit = !!type && description.trim().length > 0 && hasCounterparty && !submitting;
+  const fhBlocked = fhScan.flagged && !fhAck;
+  const canSubmit = !!type && description.trim().length > 0 && hasCounterparty && !submitting && !fhBlocked;
 
   async function handleSubmit() {
     if (!canSubmit || !rental || !user || !type) return;
@@ -182,6 +200,47 @@ export default function ReportScreen() {
                 className="w-full resize-none rounded-xl border-[1.5px] border-line-strong bg-surface-2 px-3.5 py-3 text-[15px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-tint"
               />
               <p className="mt-1.5 text-[12px] text-ink-faint">{c.noOpinions}</p>
+
+              {/* Fair Housing reminder */}
+              <p className="mt-2 flex items-start gap-1.5 text-[11.5px] leading-snug text-ink-faint">
+                <Scale className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {c.fhReminder}{" "}
+                <Link href="/legal/fair-housing" className="font-semibold text-brand underline">
+                  {c.fhLearn}
+                </Link>
+              </p>
+
+              {/* Fair Housing content warning */}
+              {fhScan.flagged && (
+                <Card className="mt-3 border border-danger/30 bg-danger-tint p-3.5">
+                  <div className="flex items-start gap-2.5">
+                    <Scale className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+                    <div>
+                      <div className="text-[13.5px] font-bold text-danger">{c.fhWarnTitle}</div>
+                      <p className="mt-1 text-[12.5px] leading-snug text-ink-soft">{c.fhWarnBody}</p>
+                      <p className="mt-1.5 text-[12px] text-ink-faint">
+                        {c.fhDetected}:{" "}
+                        {fhScan.categories.map((cat) => (locale === "es" ? cat.es : cat.en)).join(", ")}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFhAck((v) => !v)}
+                    className="mt-3 flex w-full items-start gap-2.5 text-left"
+                    aria-pressed={fhAck}
+                  >
+                    <span
+                      className={
+                        "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-[1.5px] transition-colors " +
+                        (fhAck ? "border-danger bg-danger text-white" : "border-line-strong bg-surface text-transparent")
+                      }
+                    >
+                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                    </span>
+                    <span className="text-[12.5px] leading-snug text-ink-soft">{c.fhAck}</span>
+                  </button>
+                </Card>
+              )}
 
               {/* Evidence */}
               <div className="mb-2.5 mt-6 flex items-baseline justify-between">
