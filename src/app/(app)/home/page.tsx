@@ -28,8 +28,11 @@ import {
   fetchIncomingInvitations,
   acceptInvitation,
   declineInvitation,
+  fetchIncomingAccessRequests,
+  respondAccessRequest,
   type StatsData,
   type Invitation,
+  type AccessRequestItem,
 } from "@/lib/data";
 import { useNotifications } from "@/lib/notifications";
 import { displayName, displayInitials } from "@/lib/identity";
@@ -47,6 +50,9 @@ const copy = {
     inviteBy: "invites you to a rental",
     accept: "Accept",
     decline: "Decline",
+    accessTitle: "Report access request",
+    accessWants: "wants to see your trust report",
+    approve: "Approve",
   },
   es: {
     greeting: "Bienvenido",
@@ -60,6 +66,9 @@ const copy = {
     inviteBy: "te invita a un alquiler",
     accept: "Aceptar",
     decline: "Rechazar",
+    accessTitle: "Solicitud de acceso al reporte",
+    accessWants: "quiere ver tu reporte de confianza",
+    approve: "Aprobar",
   },
 };
 
@@ -85,17 +94,33 @@ export default function HomeScreen() {
 
   const [stats, setStats] = useState<StatsData | null>(null);
   const [invites, setInvites] = useState<Invitation[]>([]);
+  const [accessReqs, setAccessReqs] = useState<AccessRequestItem[]>([]);
   const [busyInvite, setBusyInvite] = useState<string | null>(null);
+  const [busyAccess, setBusyAccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     let alive = true;
     fetchStats(user.id, locale).then((s) => alive && setStats(s));
     fetchIncomingInvitations(user.email ?? "").then((i) => alive && setInvites(i));
+    fetchIncomingAccessRequests(user.id).then((a) => alive && setAccessReqs(a));
     return () => {
       alive = false;
     };
   }, [user, locale]);
+
+  async function respondAccess(req: AccessRequestItem, approve: boolean) {
+    if (busyAccess) return;
+    setBusyAccess(req.id);
+    try {
+      await respondAccessRequest(req.id, approve);
+      setAccessReqs((prev) => prev.filter((x) => x.id !== req.id));
+    } catch {
+      /* ignore */
+    } finally {
+      setBusyAccess(null);
+    }
+  }
 
   async function respondInvite(inv: Invitation, accept: boolean) {
     if (busyInvite) return;
@@ -176,6 +201,46 @@ export default function HomeScreen() {
                 variant="secondary"
                 disabled={busyInvite === inv.id}
                 onClick={() => respondInvite(inv, false)}
+              >
+                {c.decline}
+              </Button>
+            </div>
+          </Card>
+        ))}
+
+        {/* Incoming access requests (screening consent) */}
+        {accessReqs.map((req) => (
+          <Card key={req.id} className="mt-4 border-brand/30 bg-brand-tint p-4">
+            <div className="flex items-center gap-2.5">
+              <Avatar initials={req.requesterInitials} size={36} />
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-bold text-ink">{c.accessTitle}</div>
+                <div className="truncate text-[12.5px] text-ink-soft">
+                  {req.requesterName} {c.accessWants}
+                </div>
+              </div>
+            </div>
+            {req.message && (
+              <p className="mt-2 rounded-xl bg-surface/60 px-3 py-2 text-[12.5px] leading-snug text-ink-soft">
+                “{req.message}”
+              </p>
+            )}
+            <div className="mt-3 flex gap-2">
+              <Button
+                full
+                size="sm"
+                disabled={busyAccess === req.id}
+                onClick={() => respondAccess(req, true)}
+                icon={<Check className="h-4 w-4" />}
+              >
+                {c.approve}
+              </Button>
+              <Button
+                full
+                size="sm"
+                variant="secondary"
+                disabled={busyAccess === req.id}
+                onClick={() => respondAccess(req, false)}
               >
                 {c.decline}
               </Button>

@@ -591,6 +591,24 @@ export function describeNotification(
         desc: es ? "Se agregó una declaración o evidencia." : "A statement or evidence was added.",
         tone: "amber",
       };
+    case "access_requested":
+      return {
+        title: es ? "Solicitud para ver tu reporte" : "Request to view your report",
+        desc: es ? "Alguien pide acceso a tu reporte de confianza." : "Someone asked to see your trust report.",
+        tone: "brand",
+      };
+    case "access_approved":
+      return {
+        title: es ? "Acceso aprobado" : "Access approved",
+        desc: es ? "Ya puedes ver el reporte completo." : "You can now view the full report.",
+        tone: "verify",
+      };
+    case "access_declined":
+      return {
+        title: es ? "Acceso rechazado" : "Access declined",
+        desc: es ? "La solicitud no fue aprobada." : "The request wasn't approved.",
+        tone: "amber",
+      };
     case "evidence_added":
     case "document_added":
       return {
@@ -1335,6 +1353,107 @@ export async function fetchAccessLog(userId: string, locale: Locale): Promise<Ac
       reason: locale === "es" ? "Vio tu perfil de confianza" : "Viewed your trust profile",
     };
   });
+}
+
+/* ------------------------------------------------ consent-based screening */
+export type AccessStatus = "self" | "none" | "pending" | "approved" | "declined";
+
+/** The current user's access status toward a subject's full trust report. */
+export async function fetchAccessStatus(userId: string, subjectId: string): Promise<AccessStatus> {
+  if (userId === subjectId) return "self";
+  const sb = getSupabase();
+  if (!sb) return "none";
+  const { data } = await sb
+    .from("access_requests")
+    .select("status")
+    .eq("requester_id", userId)
+    .eq("subject_id", subjectId)
+    .maybeSingle();
+  const status = (data as { status?: string } | null)?.status;
+  if (status === "pending" || status === "approved" || status === "declined") return status;
+  return "none";
+}
+
+/** Ask a subject for access to their full trust report. */
+export async function requestAccess(subjectId: string, message: string): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("request_access", { p_subject: subjectId, p_message: message });
+  if (error) throw new Error(error.message);
+}
+
+export type TrustReport = {
+  leases: number;
+  verifiedLeases: number;
+  payments: number;
+  onTimeRate: number | null;
+  ratingCount: number;
+  ratingAvg: number;
+  facts: number;
+  disputes: number;
+};
+
+/** Pull a subject's aggregated report. Returns null when access is not granted. */
+export async function fetchTrustReport(subjectId: string): Promise<TrustReport | null> {
+  const typed = getSupabase();
+  if (!typed) return null;
+  const db = typed as unknown as SupabaseClient;
+  const { data, error } = await db.rpc("get_trust_report", { p_subject: subjectId });
+  if (error || !data) return null;
+  const r = data as Record<string, unknown>;
+  return {
+    leases: (r.leases as number) ?? 0,
+    verifiedLeases: (r.verified_leases as number) ?? 0,
+    payments: (r.payments as number) ?? 0,
+    onTimeRate: (r.on_time_rate as number) ?? null,
+    ratingCount: (r.rating_count as number) ?? 0,
+    ratingAvg: Number(r.rating_avg ?? 0),
+    facts: (r.facts as number) ?? 0,
+    disputes: (r.disputes as number) ?? 0,
+  };
+}
+
+export type AccessRequestItem = {
+  id: string;
+  requesterId: string;
+  requesterName: string;
+  requesterInitials: string;
+  message: string | null;
+  timeLabel: string;
+};
+
+/** Pending access requests addressed to the current user (for the home feed). */
+export async function fetchIncomingAccessRequests(userId: string): Promise<AccessRequestItem[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("access_requests")
+    .select("id, requester_id, message, created_at, requester:profiles!access_requests_requester_id_fkey(full_name, avatar_initials)")
+    .eq("subject_id", userId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((a: Record<string, unknown>) => {
+    const req = (a.requester ?? {}) as { full_name?: string; avatar_initials?: string };
+    return {
+      id: a.id as string,
+      requesterId: a.requester_id as string,
+      requesterName: req.full_name || "—",
+      requesterInitials: req.avatar_initials || "?",
+      message: (a.message as string) ?? null,
+      timeLabel: shortDate((a.created_at as string) ?? ""),
+    };
+  });
+}
+
+/** Approve or decline an access request addressed to the current user. */
+export async function respondAccessRequest(requestId: string, approve: boolean): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("respond_access", { p_request: requestId, p_approve: approve });
+  if (error) throw new Error(error.message);
 }
 
 /* --------------------------------------------------------------- profile edit */
