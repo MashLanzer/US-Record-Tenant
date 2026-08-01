@@ -485,6 +485,12 @@ export function describeNotification(
         desc: es ? "Puedes verlo y responder." : "You can review and respond.",
         tone: "amber",
       };
+    case "rating_received":
+      return {
+        title: es ? "Recibiste una calificación" : "You received a rating",
+        desc: d.overall ? `${d.overall}★` : "",
+        tone: "verify",
+      };
     case "evidence_added":
     case "document_added":
       return {
@@ -783,6 +789,70 @@ export async function fetchReportsAboutMe(userId: string): Promise<ReportItem[]>
   }));
 }
 
+/* --------------------------------------------------------- bilateral ratings */
+export type RatingInput = {
+  overall: number;
+  communication: number;
+  reliability: number;
+  care: number;
+  comment: string;
+};
+
+export type MyRating = {
+  overall: number;
+  communication: number | null;
+  reliability: number | null;
+  care: number | null;
+  comment: string | null;
+} | null;
+
+export async function submitRating(leaseId: string, input: RatingInput): Promise<void> {
+  const typed = getSupabase();
+  if (!typed) throw new Error("demo-mode");
+  const db = typed as unknown as SupabaseClient;
+  const { error } = await db.rpc("submit_rating", {
+    p_lease_id: leaseId,
+    p_overall: input.overall,
+    p_communication: input.communication,
+    p_reliability: input.reliability,
+    p_care: input.care,
+    p_comment: input.comment,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** The rating the current user has already given on this lease (to edit). */
+export async function fetchMyRatingForLease(leaseId: string, userId: string): Promise<MyRating> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data } = await sb
+    .from("ratings")
+    .select("overall, communication, reliability, care, comment")
+    .eq("lease_id", leaseId)
+    .eq("rater_id", userId)
+    .maybeSingle();
+  if (!data) return null;
+  const r = data as Record<string, unknown>;
+  return {
+    overall: (r.overall as number) ?? 0,
+    communication: (r.communication as number) ?? null,
+    reliability: (r.reliability as number) ?? null,
+    care: (r.care as number) ?? null,
+    comment: (r.comment as string) ?? null,
+  };
+}
+
+/** Aggregate of ratings received by a user. */
+export async function fetchRatingSummary(userId: string): Promise<{ count: number; avg: number }> {
+  const sb = getSupabase();
+  if (!sb) return { count: 0, avg: 0 };
+  const { data } = await sb.from("ratings").select("overall").eq("ratee_id", userId);
+  const rows = (data ?? []) as { overall: number }[];
+  if (rows.length === 0) return { count: 0, avg: 0 };
+  const avg = rows.reduce((s, r) => s + (r.overall ?? 0), 0) / rows.length;
+  return { count: rows.length, avg };
+}
+
 /* ------------------------------------------------ lease invitations (bilateral) */
 export type Invitation = {
   id: string;
@@ -884,10 +954,11 @@ export async function computeAndSyncTrust(userId: string): Promise<TrustBreakdow
   const sb = getSupabase();
   if (!sb) return { score: mockMe.trustScore, factors: mockFactors };
 
-  const [rentals, payments, profRes] = await Promise.all([
+  const [rentals, payments, profRes, ratings] = await Promise.all([
     fetchMyRentals(userId),
     fetchMyPayments(userId),
     sb.from("profiles").select("identity_verified").eq("id", userId).single(),
+    fetchRatingSummary(userId),
   ]);
   const idVerified = Boolean((profRes.data as Record<string, unknown> | null)?.identity_verified);
 
@@ -896,16 +967,18 @@ export async function computeAndSyncTrust(userId: string): Promise<TrustBreakdow
   const punctuality = payTotal > 0 ? Math.round((payOnTime / payTotal) * 100) : 70;
   const verification = idVerified ? 100 : 40;
   const history = Math.min(100, 40 + rentals.length * 25 + (payTotal >= 6 ? 15 : 0));
+  const peer = ratings.count > 0 ? Math.round(ratings.avg * 20) : 70;
 
   const factors: TrustFactor[] = [
     { key: "punctuality", labelEn: "Payment punctuality", labelEs: "Puntualidad de pago", score: punctuality, tone: factorTone(punctuality) },
+    { key: "peer", labelEn: "Peer ratings", labelEs: "Calificaciones", score: peer, tone: factorTone(peer) },
     { key: "verification", labelEn: "Verification", labelEs: "Verificación", score: verification, tone: factorTone(verification) },
     { key: "history", labelEn: "History depth", labelEs: "Historial", score: history, tone: factorTone(history) },
   ];
 
   const score = Math.max(
     40,
-    Math.min(100, Math.round(punctuality * 0.4 + verification * 0.3 + history * 0.3)),
+    Math.min(100, Math.round(punctuality * 0.3 + peer * 0.25 + verification * 0.25 + history * 0.2)),
   );
 
   const db = sb as unknown as SupabaseClient;

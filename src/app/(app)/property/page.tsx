@@ -15,6 +15,7 @@ import {
   Clock,
   UserPlus,
   Mail,
+  Star,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
@@ -32,10 +33,13 @@ import {
   fetchLeaseInvites,
   fetchReportsForLease,
   reportTypeLabel,
+  submitRating,
+  fetchMyRatingForLease,
   type Rental,
   type PaymentItem,
   type Invitation,
   type ReportItem,
+  type MyRating,
 } from "@/lib/data";
 
 const copy = {
@@ -82,6 +86,20 @@ const copy = {
     stOpen: "Open",
     stDisputed: "Disputed",
     stResolved: "Resolved",
+    rateTitle: "Rate your counterparty",
+    overall: "Overall",
+    comm: "Communication",
+    relLandlord: "Payment punctuality",
+    careLandlord: "Property care",
+    relTenant: "Deposit & fairness",
+    careTenant: "Repairs & maintenance",
+    comment: "Comment (optional)",
+    commentPh: "Share your experience…",
+    saveRating: "Save rating",
+    savingRating: "Saving…",
+    yourRating: "Your rating",
+    editRating: "Edit",
+    ratedNote: "Ratings feed the other party's trust score. One rating per lease — you can update it anytime.",
   },
   es: {
     map: "Mapa",
@@ -126,6 +144,20 @@ const copy = {
     stOpen: "Abierto",
     stDisputed: "En disputa",
     stResolved: "Resuelto",
+    rateTitle: "Califica a tu contraparte",
+    overall: "General",
+    comm: "Comunicación",
+    relLandlord: "Puntualidad de pago",
+    careLandlord: "Cuidado de la propiedad",
+    relTenant: "Depósito y trato",
+    careTenant: "Reparaciones",
+    comment: "Comentario (opcional)",
+    commentPh: "Comparte tu experiencia…",
+    saveRating: "Guardar calificación",
+    savingRating: "Guardando…",
+    yourRating: "Tu calificación",
+    editRating: "Editar",
+    ratedNote: "Las calificaciones alimentan el puntaje de confianza de la otra parte. Una por contrato — puedes actualizarla cuando quieras.",
   },
 };
 
@@ -150,6 +182,15 @@ export default function PropertyScreen() {
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [reports, setReports] = useState<ReportItem[]>([]);
 
+  const [myRating, setMyRating] = useState<MyRating | undefined>(undefined);
+  const [showRate, setShowRate] = useState(false);
+  const [rOverall, setROverall] = useState(0);
+  const [rComm, setRComm] = useState(0);
+  const [rRel, setRRel] = useState(0);
+  const [rCare, setRCare] = useState(0);
+  const [rComment, setRComment] = useState("");
+  const [savingRating, setSavingRating] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     const id = new URLSearchParams(window.location.search).get("id") ?? "";
@@ -172,6 +213,45 @@ export default function PropertyScreen() {
   useEffect(() => {
     if (rental && user) fetchReportsForLease(rental.id, user.id).then(setReports);
   }, [rental, user]);
+
+  // Load my existing rating (if the lease is bilateral).
+  useEffect(() => {
+    const bilateral = rental && (rental.relation === "tenant" || rental.tenantId);
+    if (rental && user && bilateral) {
+      fetchMyRatingForLease(rental.id, user.id).then((r) => {
+        setMyRating(r);
+        if (r) {
+          setROverall(r.overall);
+          setRComm(r.communication ?? 0);
+          setRRel(r.reliability ?? 0);
+          setRCare(r.care ?? 0);
+          setRComment(r.comment ?? "");
+        }
+      });
+    } else {
+      setMyRating(null);
+    }
+  }, [rental, user]);
+
+  async function handleSaveRating() {
+    if (!rental || !user || savingRating || rOverall < 1) return;
+    setSavingRating(true);
+    try {
+      await submitRating(rental.id, {
+        overall: rOverall,
+        communication: rComm || rOverall,
+        reliability: rRel || rOverall,
+        care: rCare || rOverall,
+        comment: rComment.trim(),
+      });
+      setMyRating(await fetchMyRatingForLease(rental.id, user.id));
+      setShowRate(false);
+    } catch {
+      /* ignore */
+    } finally {
+      setSavingRating(false);
+    }
+  }
 
   async function handleInvite() {
     if (!rental || !user || inviting || !inviteEmail.trim()) return;
@@ -483,6 +563,65 @@ export default function PropertyScreen() {
             </>
           )}
 
+          {/* Rate counterparty */}
+          {(rental.relation === "tenant" || rental.tenantId) && myRating !== undefined && (
+            <>
+              <div className="mb-2.5 mt-6 text-[13px] font-bold uppercase tracking-wider text-ink-faint">
+                {c.rateTitle}
+              </div>
+              {myRating && !showRate ? (
+                <Card className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[12px] text-ink-faint">{c.yourRating}</div>
+                      <div className="mt-1">
+                        <StarField label="" value={myRating.overall} />
+                      </div>
+                    </div>
+                    <Button size="sm" variant="secondary" onClick={() => setShowRate(true)}>
+                      {c.editRating}
+                    </Button>
+                  </div>
+                  {myRating.comment && <p className="mt-2 text-[13px] text-ink-soft">{myRating.comment}</p>}
+                </Card>
+              ) : (
+                <Card className="space-y-3.5 p-4">
+                  <StarField label={c.overall} value={rOverall} onChange={setROverall} />
+                  <StarField label={c.comm} value={rComm} onChange={setRComm} />
+                  <StarField
+                    label={rental.relation === "landlord" ? c.relLandlord : c.relTenant}
+                    value={rRel}
+                    onChange={setRRel}
+                  />
+                  <StarField
+                    label={rental.relation === "landlord" ? c.careLandlord : c.careTenant}
+                    value={rCare}
+                    onChange={setRCare}
+                  />
+                  <div>
+                    <div className="mb-1.5 text-[13px] font-semibold text-ink-soft">{c.comment}</div>
+                    <textarea
+                      value={rComment}
+                      onChange={(e) => setRComment(e.target.value)}
+                      placeholder={c.commentPh}
+                      rows={3}
+                      className="w-full resize-none rounded-xl border-[1.5px] border-line-strong bg-surface-2 px-3.5 py-2.5 text-[14px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-tint"
+                    />
+                  </div>
+                  <p className="text-[11.5px] leading-snug text-ink-faint">{c.ratedNote}</p>
+                  <Button
+                    full
+                    disabled={rOverall < 1 || savingRating}
+                    onClick={handleSaveRating}
+                    icon={<Star className="h-[18px] w-[18px]" />}
+                  >
+                    {savingRating ? c.savingRating : c.saveRating}
+                  </Button>
+                </Card>
+              )}
+            </>
+          )}
+
           {/* Report */}
           {(rental.relation === "tenant" || rental.tenantId) && (
             <div className="mt-6">
@@ -508,6 +647,40 @@ function Row({ icon, label, children }: { icon: React.ReactNode; label: string; 
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand">{icon}</span>
       <span className="text-[14px] text-ink-soft">{label}</span>
       <span className="ml-auto text-[15px] font-semibold text-ink">{children}</span>
+    </div>
+  );
+}
+
+function StarField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange?: (v: number) => void;
+}) {
+  const readOnly = !onChange;
+  return (
+    <div className={label ? "flex items-center justify-between gap-3" : "flex items-center gap-1"}>
+      {label && <span className="text-[14px] text-ink-soft">{label}</span>}
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            disabled={readOnly}
+            onClick={() => onChange?.(n)}
+            className={
+              (readOnly ? "cursor-default " : "transition-transform active:scale-90 ") +
+              (n <= value ? "text-amber" : "text-line-strong")
+            }
+            aria-label={`${n}`}
+          >
+            <Star className="h-6 w-6" fill={n <= value ? "currentColor" : "none"} strokeWidth={2} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
