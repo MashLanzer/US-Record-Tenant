@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, ChevronRight, ShieldCheck, TrendingUp, FileCheck2, Plus } from "lucide-react";
+import {
+  Bell,
+  ChevronRight,
+  ShieldCheck,
+  Plus,
+  Sparkles,
+  CreditCard,
+  MessageSquare,
+} from "lucide-react";
 import { Screen } from "@/components/app-shell";
 import { SectionTitle } from "@/components/app-header";
 import { Avatar, Card, StatCard, Button } from "@/components/ui/primitives";
@@ -11,62 +19,84 @@ import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { useT, useLocale } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { useAuth } from "@/lib/auth";
-import { fetchMyRentals, trustLabel } from "@/lib/data";
-import { me, notifications } from "@/lib/mock";
+import {
+  fetchStats,
+  fetchNotifications,
+  describeNotification,
+  trustLabel,
+  type StatsData,
+  type NotificationItem,
+} from "@/lib/data";
+import { displayName, displayInitials } from "@/lib/identity";
 
 const copy = {
   en: {
-    greeting: "Good afternoon",
+    greeting: "Welcome",
     yourScore: "YOUR TRUST INDEX",
-    thisMonth: "this month",
     rentals: "Rentals",
     onTime: "On-time",
     activity: "Recent activity",
     addContract: "Add contract",
-    seeReputation: "See how your score works",
+    noActivity: "No activity yet. Add a contract to get started.",
   },
   es: {
-    greeting: "Buenas tardes",
+    greeting: "Bienvenido",
     yourScore: "TU ÍNDICE DE CONFIANZA",
-    thisMonth: "este mes",
     rentals: "Alquileres",
     onTime: "Pagos ok",
     activity: "Actividad reciente",
     addContract: "Añadir contrato",
-    seeReputation: "Cómo funciona tu score",
+    noActivity: "Aún no hay actividad. Añade un contrato para empezar.",
   },
 };
+
+function iconFor(type: string) {
+  switch (type) {
+    case "payment_recorded":
+      return <CreditCard className="h-5 w-5" />;
+    case "message":
+      return <MessageSquare className="h-5 w-5" />;
+    case "welcome":
+      return <Sparkles className="h-5 w-5" />;
+    default:
+      return <ShieldCheck className="h-5 w-5" />;
+  }
+}
 
 export default function HomeScreen() {
   const c = useT(copy);
   const g = useT(common);
   const { locale } = useLocale();
-  const { profile, user, demoMode } = useAuth();
-  const unread = notifications.filter((n) => n.unread).length;
+  const { profile, user } = useAuth();
 
-  const [rentalCount, setRentalCount] = useState<number | null>(null);
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [notifs, setNotifs] = useState<NotificationItem[] | null>(null);
+
   useEffect(() => {
     if (!user) return;
     let alive = true;
-    fetchMyRentals(user.id).then((r) => alive && setRentalCount(r.length));
+    fetchStats(user.id, locale).then((s) => alive && setStats(s));
+    fetchNotifications(user.id).then((n) => alive && setNotifs(n));
     return () => {
       alive = false;
     };
-  }, [user]);
+  }, [user, locale]);
 
-  const name = profile?.full_name || me.name;
-  const initials = profile?.avatar_initials || me.initials;
-  const score = profile?.trust_score ?? me.trustScore;
+  const name = displayName(profile, user?.email, locale);
+  const initials = displayInitials(profile, user?.email);
+  const score = profile?.trust_score ?? 70;
   const ratingLabel = trustLabel(score, locale);
+  const unread = (notifs ?? []).filter((n) => !n.read).length;
+  const recent = (notifs ?? []).slice(0, 3);
 
   return (
     <PageFade>
       <Screen>
         {/* Greeting */}
         <div className="flex items-center justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-[13px] text-ink-faint">{c.greeting}</p>
-            <h1 className="text-[26px] font-extrabold tracking-tight text-ink">{name}</h1>
+            <h1 className="truncate text-[26px] font-extrabold tracking-tight text-ink">{name}</h1>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -93,11 +123,6 @@ export default function HomeScreen() {
               <div className="min-w-0 text-white">
                 <div className="text-[10px] font-semibold opacity-85">{c.yourScore}</div>
                 <div className="mt-0.5 text-[13px] opacity-95">{ratingLabel}</div>
-                {demoMode && (
-                  <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-semibold">
-                    <TrendingUp className="h-3.5 w-3.5" /> +3 {c.thisMonth}
-                  </span>
-                )}
               </div>
               <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-white/70" />
             </div>
@@ -106,41 +131,59 @@ export default function HomeScreen() {
 
         {/* KPIs */}
         <div className="mt-3 flex gap-3">
-          <StatCard label={c.rentals} value={rentalCount === null ? "—" : String(rentalCount)} />
-          <StatCard label={c.onTime} value="100%" tone="verify" />
+          <StatCard label={c.rentals} value={stats ? String(stats.rentals) : "—"} />
+          <StatCard
+            label={c.onTime}
+            value={stats && stats.rentals > 0 ? `${stats.onTimeRate}%` : "—"}
+            tone="verify"
+          />
         </div>
 
         {/* Activity */}
-        <SectionTitle action={<Link href="/timeline" className="text-[13px] font-semibold text-brand">{g.actions.seeAll}</Link>}>
+        <SectionTitle
+          action={
+            <Link href="/notifications" className="text-[13px] font-semibold text-brand">
+              {g.actions.seeAll}
+            </Link>
+          }
+        >
           {c.activity}
         </SectionTitle>
         <Card className="p-2">
-          <Stagger>
-            {[
-              { icon: <ShieldCheck className="h-5 w-5" />, tone: "verify", en: "Your contract was verified", es: "Tu contrato fue verificado", sub: "742 Ocean Ave", t: "2h" },
-              { icon: <FileCheck2 className="h-5 w-5" />, tone: "brand", en: "December rent recorded on time", es: "Renta de diciembre a tiempo", sub: "$2,400", t: "1d" },
-            ].map((a, i) => (
-              <StaggerItem key={i}>
-                <div className="flex items-center gap-3 rounded-xl p-2">
-                  <span
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${a.tone === "verify" ? "bg-verify-tint text-verify" : "bg-brand-tint text-brand"}`}
-                  >
-                    {a.icon}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[14px] font-semibold text-ink">{locale === "es" ? a.es : a.en}</div>
-                    <div className="text-[12px] text-ink-faint">{a.sub}</div>
-                  </div>
-                  <span className="text-[12px] text-ink-faint">{a.t}</span>
-                </div>
-              </StaggerItem>
-            ))}
-          </Stagger>
+          {recent.length === 0 ? (
+            <p className="px-3 py-4 text-center text-[13px] text-ink-faint">{c.noActivity}</p>
+          ) : (
+            <Stagger>
+              {recent.map((n) => {
+                const d = describeNotification(n, locale);
+                const toneCls =
+                  d.tone === "verify"
+                    ? "bg-verify-tint text-verify"
+                    : d.tone === "amber"
+                      ? "bg-amber-tint text-amber"
+                      : "bg-brand-tint text-brand";
+                return (
+                  <StaggerItem key={n.id}>
+                    <div className="flex items-center gap-3 rounded-xl p-2">
+                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${toneCls}`}>
+                        {iconFor(n.type)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[14px] font-semibold text-ink">{d.title}</div>
+                        {d.desc && <div className="truncate text-[12px] text-ink-faint">{d.desc}</div>}
+                      </div>
+                      <span className="text-[12px] text-ink-faint">{n.timeLabel}</span>
+                    </div>
+                  </StaggerItem>
+                );
+              })}
+            </Stagger>
+          )}
         </Card>
 
         {/* Primary action */}
         <div className="mt-5">
-          <Button href="/rentals" full icon={<Plus className="h-[18px] w-[18px]" />}>
+          <Button href="/rentals/new" full icon={<Plus className="h-[18px] w-[18px]" />}>
             {c.addContract}
           </Button>
         </div>

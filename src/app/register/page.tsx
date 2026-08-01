@@ -17,6 +17,8 @@ const copy = {
     title: "Create your account",
     subtitle: "One profile, verified once — trusted everywhere.",
     role: "I am a",
+    name: "Full name",
+    namePh: "Your name",
     email: "Email",
     emailPh: "you@email.com",
     password: "Password",
@@ -33,6 +35,8 @@ const copy = {
     title: "Crea tu cuenta",
     subtitle: "Un perfil, verificado una vez: confiable en todas partes.",
     role: "Soy",
+    name: "Nombre completo",
+    namePh: "Tu nombre",
     email: "Correo electrónico",
     emailPh: "tu@correo.com",
     password: "Contraseña",
@@ -61,6 +65,7 @@ export default function RegisterScreen() {
   const router = useRouter();
   const { signUp, signInWithOAuth, demoMode } = useAuth();
   const [role, setRole] = useState<Role>("tenant");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
@@ -76,7 +81,7 @@ export default function RegisterScreen() {
     if (!agreed || submitting) return;
     setSubmitting(true);
     setError(null);
-    const { error } = await signUp(email, password, role);
+    const { error } = await signUp(email, password, role, fullName.trim() || undefined);
     if (error) {
       setError(error);
       setSubmitting(false);
@@ -114,6 +119,15 @@ export default function RegisterScreen() {
         </div>
 
         <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <Field label={c.name}>
+            <Input
+              type="text"
+              autoComplete="name"
+              placeholder={c.namePh}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </Field>
           <Field label={c.email}>
             <Input
               type="email"

@@ -21,9 +21,9 @@ import { Screen } from "@/components/app-shell";
 import { Card, ListRow, Toggle } from "@/components/ui/primitives";
 import { ThemeToggle, LangToggle } from "@/components/toggles";
 import { PageFade } from "@/components/motion";
-import { useT } from "@/lib/i18n";
+import { useT, useLocale } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { me } from "@/lib/mock";
+import { displayName } from "@/lib/identity";
 
 const copy = {
   en: {
@@ -76,9 +76,11 @@ const chevron = <ChevronRight className="h-5 w-5 text-ink-faint" />;
 
 export default function SettingsScreen() {
   const c = useT(copy);
-  const { signOut } = useAuth();
+  const { locale } = useLocale();
+  const { signOut, profile, user } = useAuth();
   const [faceId, setFaceId] = useState(true);
   const [notify, setNotify] = useState(true);
+  const name = displayName(profile, user?.email, locale);
 
   return (
     <>
@@ -88,8 +90,8 @@ export default function SettingsScreen() {
           {/* Account */}
           <SectionTitle>{c.account}</SectionTitle>
           <Card className="divide-y divide-line px-3.5">
-            <ListRow icon={<User className="h-5 w-5" />} title={c.name} subtitle={me.name} right={chevron} onClick={() => {}} />
-            <ListRow icon={<Mail className="h-5 w-5" />} title={c.email} subtitle="maria.r@email.com" right={chevron} onClick={() => {}} />
+            <ListRow icon={<User className="h-5 w-5" />} title={c.name} subtitle={name} right={chevron} onClick={() => {}} />
+            <ListRow icon={<Mail className="h-5 w-5" />} title={c.email} subtitle={user?.email ?? "—"} right={chevron} onClick={() => {}} />
           </Card>
 
           {/* Security */}

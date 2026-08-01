@@ -22,6 +22,7 @@ import { useT, useLocale } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { useAuth } from "@/lib/auth";
 import { trustLabel } from "@/lib/data";
+import { displayName, displayInitials } from "@/lib/identity";
 import { me, trustFactors, verifications } from "@/lib/mock";
 
 const copy = {
@@ -75,11 +76,11 @@ export default function ProfileScreen() {
   const c = useT(copy);
   const g = useT(common);
   const { locale } = useLocale();
-  const { signOut, profile, demoMode } = useAuth();
+  const { signOut, profile, demoMode, user } = useAuth();
 
-  const name = profile?.full_name || me.name;
-  const initials = profile?.avatar_initials || me.initials;
-  const score = profile?.trust_score ?? me.trustScore;
+  const name = displayName(profile, user?.email, locale);
+  const initials = displayInitials(profile, user?.email);
+  const score = profile?.trust_score ?? 70;
   const role = (profile?.role ?? "tenant") as "tenant" | "landlord";
   const verified = demoMode ? true : !!profile?.identity_verified;
   const memberYear = demoMode
