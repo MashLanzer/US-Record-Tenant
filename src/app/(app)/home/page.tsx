@@ -23,16 +23,15 @@ import { common } from "@/lib/i18n/common";
 import { useAuth } from "@/lib/auth";
 import {
   fetchStats,
-  fetchNotifications,
   describeNotification,
   trustLabel,
   fetchIncomingInvitations,
   acceptInvitation,
   declineInvitation,
   type StatsData,
-  type NotificationItem,
   type Invitation,
 } from "@/lib/data";
+import { useNotifications } from "@/lib/notifications";
 import { displayName, displayInitials } from "@/lib/identity";
 
 const copy = {
@@ -82,9 +81,9 @@ export default function HomeScreen() {
   const g = useT(common);
   const { locale } = useLocale();
   const { profile, user } = useAuth();
+  const { items: notifs, unread } = useNotifications();
 
   const [stats, setStats] = useState<StatsData | null>(null);
-  const [notifs, setNotifs] = useState<NotificationItem[] | null>(null);
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [busyInvite, setBusyInvite] = useState<string | null>(null);
 
@@ -92,7 +91,6 @@ export default function HomeScreen() {
     if (!user) return;
     let alive = true;
     fetchStats(user.id, locale).then((s) => alive && setStats(s));
-    fetchNotifications(user.id).then((n) => alive && setNotifs(n));
     fetchIncomingInvitations(user.email ?? "").then((i) => alive && setInvites(i));
     return () => {
       alive = false;
@@ -118,8 +116,7 @@ export default function HomeScreen() {
   const initials = displayInitials(profile, user?.email);
   const score = profile?.trust_score ?? 70;
   const ratingLabel = trustLabel(score, locale);
-  const unread = (notifs ?? []).filter((n) => !n.read).length;
-  const recent = (notifs ?? []).slice(0, 3);
+  const recent = notifs.slice(0, 3);
 
   return (
     <PageFade>
@@ -138,7 +135,9 @@ export default function HomeScreen() {
             >
               <Bell className="h-5 w-5" />
               {unread > 0 && (
-                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-surface bg-brand" />
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full border-2 border-surface bg-brand px-1 text-[10px] font-bold leading-none text-white tnum">
+                  {unread > 9 ? "9+" : unread}
+                </span>
               )}
             </Link>
             <Link href="/profile" aria-label="Profile">

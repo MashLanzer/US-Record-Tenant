@@ -9,6 +9,7 @@ import { useT } from "@/lib/i18n";
 import { common } from "@/lib/i18n/common";
 import { ThemeToggle, LangToggle } from "@/components/toggles";
 import { OfflineBanner } from "@/components/offline-banner";
+import { useNotifications } from "@/lib/notifications";
 
 type NavKey = "home" | "search" | "records" | "messages" | "profile";
 const NAV: { key: NavKey; href: string; icon: LucideIcon }[] = [
@@ -27,6 +28,7 @@ function isActive(pathname: string, href: string) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const t = useT(common);
+  const { unread } = useNotifications();
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-[1180px]">
@@ -52,7 +54,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                     : "text-ink-soft hover:bg-surface-3 hover:text-ink",
                 )}
               >
-                <Icon className="h-[20px] w-[20px]" />
+                <span className="relative">
+                  <Icon className="h-[20px] w-[20px]" />
+                  {key === "home" && unread > 0 && (
+                    <span className="absolute -right-1.5 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[9px] font-bold leading-none text-white tnum">
+                      {unread > 9 ? "9+" : unread}
+                    </span>
+                  )}
+                </span>
                 {t.tabs[key]}
               </Link>
             );
@@ -83,7 +92,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 active ? "text-brand" : "text-ink-faint",
               )}
             >
-              <Icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.3 : 1.8} />
+              <span className="relative">
+                <Icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.3 : 1.8} />
+                {key === "home" && unread > 0 && (
+                  <span className="absolute -right-2 -top-1 grid h-4 min-w-4 place-items-center rounded-full border-2 border-surface bg-brand px-0.5 text-[9px] font-bold leading-none text-white tnum">
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                )}
+              </span>
               {t.tabs[key]}
             </Link>
           );

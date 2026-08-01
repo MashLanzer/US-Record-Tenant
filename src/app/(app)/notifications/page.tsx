@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Sparkles,
@@ -20,13 +20,8 @@ import { EmptyState } from "@/components/ui/empty";
 import { PageFade, Stagger, StaggerItem } from "@/components/motion";
 import { cn } from "@/lib/cn";
 import { useT, useLocale } from "@/lib/i18n";
-import { useAuth } from "@/lib/auth";
-import {
-  fetchNotifications,
-  markNotificationsRead,
-  describeNotification,
-  type NotificationItem,
-} from "@/lib/data";
+import { describeNotification } from "@/lib/data";
+import { useNotifications } from "@/lib/notifications";
 
 const copy = {
   en: {
@@ -76,28 +71,27 @@ const TONE_CLS: Record<"verify" | "brand" | "amber" | "danger", string> = {
 export default function NotificationsScreen() {
   const c = useT(copy);
   const { locale } = useLocale();
-  const { user } = useAuth();
+  const { items, loading, unread, markAllRead } = useNotifications();
   const [tab, setTab] = useState<"all" | "unread">("all");
-  const [items, setItems] = useState<NotificationItem[] | null>(null);
 
+  // Snapshot which items were unread on open, so the UI still highlights them
+  // for this visit even after we auto-mark everything read.
+  const unreadSnapshot = useRef<Set<string> | null>(null);
+  if (unreadSnapshot.current === null && !loading) {
+    unreadSnapshot.current = new Set(items.filter((n) => !n.read).map((n) => n.id));
+  }
+
+  // Opening this screen clears the unread badge everywhere.
   useEffect(() => {
-    let alive = true;
-    if (!user) return;
-    fetchNotifications(user.id).then((n) => {
-      if (alive) setItems(n);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [user]);
+    if (!loading && unread > 0) void markAllRead();
+  }, [loading, unread, markAllRead]);
 
-  const loading = items === null;
-  const list = (items ?? []).filter((n) => (tab === "unread" ? !n.read : true));
+  const wasUnread = (id: string) => unreadSnapshot.current?.has(id) ?? false;
+  const list = items.filter((n) => (tab === "unread" ? wasUnread(n.id) : true));
 
   const markAll = () => {
-    if (!user) return;
-    markNotificationsRead(user.id);
-    setItems((prev) => (prev ? prev.map((n) => ({ ...n, read: true })) : prev));
+    unreadSnapshot.current = new Set();
+    void markAllRead();
   };
 
   return (
@@ -144,7 +138,7 @@ export default function NotificationsScreen() {
                 {list.map((n) => {
                   const { title, desc, tone } = describeNotification(n, locale);
                   const Icon = TYPE_ICON[n.type] ?? Bell;
-                  const unread = !n.read;
+                  const unread = wasUnread(n.id);
                   const href = TYPE_LINK[n.type];
                   const Wrapper = href
                     ? ({ children }: { children: React.ReactNode }) => (
