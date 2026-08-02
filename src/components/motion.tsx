@@ -1,10 +1,12 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
 
 /** Subtle enter transition used on screen mount for a native, smooth feel. */
 export function PageFade({ children, className }: { children: ReactNode; className?: string }) {
+  const reduce = useReducedMotion();
+  if (reduce) return <div className={className}>{children}</div>;
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -19,6 +21,8 @@ export function PageFade({ children, className }: { children: ReactNode; classNa
 
 /** Staggered list item reveal. */
 export function Stagger({ children, className }: { children: ReactNode; className?: string }) {
+  const reduce = useReducedMotion();
+  if (reduce) return <div className={className}>{children}</div>;
   return (
     <motion.div
       initial="hidden"
@@ -32,6 +36,8 @@ export function Stagger({ children, className }: { children: ReactNode; classNam
 }
 
 export function StaggerItem({ children, className }: { children: ReactNode; className?: string }) {
+  const reduce = useReducedMotion();
+  if (reduce) return <div className={className}>{children}</div>;
   return (
     <motion.div
       variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}

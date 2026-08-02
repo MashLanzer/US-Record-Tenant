@@ -179,10 +179,12 @@ export function SegmentedControl<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cn("inline-flex gap-1 rounded-xl bg-surface-3 p-1", className)}>
+    <div role="radiogroup" className={cn("inline-flex gap-1 rounded-xl bg-surface-3 p-1", className)}>
       {options.map((o) => (
         <button
           key={o.value}
+          role="radio"
+          aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
             "flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-all",

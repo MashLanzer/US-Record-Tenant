@@ -39,6 +39,12 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Keep the document language in sync so assistive tech reads content in the
+  // right language (WCAG 3.1.1 Language of Page).
+  useEffect(() => {
+    if (typeof document !== "undefined") document.documentElement.lang = locale;
+  }, [locale]);
+
   const setLocale = (l: Locale) => {
     setLocaleState(l);
     try {

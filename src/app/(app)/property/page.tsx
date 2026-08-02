@@ -809,26 +809,41 @@ function StarField({
   onChange?: (v: number) => void;
 }) {
   const readOnly = !onChange;
+  const groupLabel = label || "Rating";
   return (
     <div className={label ? "flex items-center justify-between gap-3" : "flex items-center gap-1"}>
       {label && <span className="text-[14px] text-ink-soft">{label}</span>}
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            disabled={readOnly}
-            onClick={() => onChange?.(n)}
-            className={
-              (readOnly ? "cursor-default " : "transition-transform active:scale-90 ") +
-              (n <= value ? "text-amber" : "text-line-strong")
-            }
-            aria-label={`${n}`}
-          >
-            <Star className="h-6 w-6" fill={n <= value ? "currentColor" : "none"} strokeWidth={2} />
-          </button>
-        ))}
-      </div>
+      {readOnly ? (
+        <div className="flex gap-1" role="img" aria-label={`${groupLabel}: ${value} of 5`}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Star
+              key={n}
+              aria-hidden="true"
+              className={"h-6 w-6 " + (n <= value ? "text-amber" : "text-line-strong")}
+              fill={n <= value ? "currentColor" : "none"}
+              strokeWidth={2}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex gap-1" role="radiogroup" aria-label={groupLabel}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={n === value}
+              onClick={() => onChange?.(n)}
+              className={
+                "transition-transform active:scale-90 " + (n <= value ? "text-amber" : "text-line-strong")
+              }
+              aria-label={`${n} of 5`}
+            >
+              <Star className="h-6 w-6" fill={n <= value ? "currentColor" : "none"} strokeWidth={2} />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
