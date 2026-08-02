@@ -8,7 +8,7 @@
 export type LegalDocKey = "terms" | "privacy" | "fcra";
 
 export const LEGAL_VERSIONS: Record<LegalDocKey, string> = {
-  terms: "1.0",
+  terms: "1.1", // 1.1: added warranties, liability, arbitration, governing law, DMCA
   privacy: "1.0",
   fcra: "1.0",
 };

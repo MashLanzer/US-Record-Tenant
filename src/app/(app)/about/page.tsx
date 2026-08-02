@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ShieldCheck, Scale, FileText, Lock, ChevronRight, Heart, Home, MapPin, Clock, Accessibility } from "lucide-react";
+import { ShieldCheck, Scale, FileText, Lock, ChevronRight, Heart, Home, MapPin, Clock, Accessibility, Copyright } from "lucide-react";
 import { AppHeader, SectionTitle } from "@/components/app-header";
 import { Screen } from "@/components/app-shell";
 import { Card, ListRow } from "@/components/ui/primitives";
@@ -31,6 +31,7 @@ const copy = {
     stateRules: "State screening rules",
     retention: "Data retention",
     accessibility: "Accessibility",
+    dmca: "Copyright / DMCA",
     version: "Version",
     madeWith: "Made with care for renters and owners alike.",
     equalHousing: "Equal Housing Opportunity. We do not tolerate discrimination based on any protected class.",
@@ -55,6 +56,7 @@ const copy = {
     stateRules: "Reglas estatales de screening",
     retention: "Retención de datos",
     accessibility: "Accesibilidad",
+    dmca: "Derechos de autor / DMCA",
     version: "Versión",
     madeWith: "Hecho con cuidado para inquilinos y propietarios por igual.",
     equalHousing: "Igualdad de Oportunidad de Vivienda. No toleramos la discriminación por ninguna clase protegida.",
@@ -98,6 +100,7 @@ export default function AboutScreen() {
             <ListRow icon={<MapPin className="h-5 w-5" />} title={c.stateRules} right={chevron} href="/legal/state-rules" />
             <ListRow icon={<Clock className="h-5 w-5" />} title={c.retention} right={chevron} href="/legal/retention" />
             <ListRow icon={<Accessibility className="h-5 w-5" />} title={c.accessibility} right={chevron} href="/legal/accessibility" />
+            <ListRow icon={<Copyright className="h-5 w-5" />} title={c.dmca} right={chevron} href="/legal/dmca" />
           </Card>
 
           <div className="mt-5 flex items-center gap-2.5 rounded-2xl border border-line bg-surface-2 p-3.5">
